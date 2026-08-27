@@ -28,6 +28,8 @@
 | `/health` and headers | PASS — build SHA JSON, CSP, no-sniff, frame deny, referrer and permissions policy |
 | Graceful SIGINT | PASS — structured `server_stopped` event |
 | Visual inspection | PASS — desktop home and 360px player entry captured and reviewed |
+| Factory URL verifier | PASS — HTTPS 200, 582 ms load, one h1/main/lang/title, no console errors |
+| Live-domain E2E | PASS — eight-round host/3-player loop plus desktop/mobile Axe checks |
 
 Run all product gates with:
 
@@ -42,12 +44,11 @@ cargo clippy --all-targets -- -D warnings
 
 ## Deployment
 
-Build with `docker build --build-arg BUILD_SHA=<sha> -t open-quiz-arena .`; run on port 8080 with one sticky container instance. Room state is intentionally local to a process, so horizontal replicas require WebSocket/session affinity. The runtime uses non-root UID/GID 10001.
+Deployed through the factory Azure Container Apps flow at `https://open-quiz-arena.sociobot.in`. The ACR build of the multi-stage Dockerfile succeeded as image `sociobotregistry.azurecr.io/sf-open-quiz-arena:581382ac36ff`. The app is configured with `BUILD_SHA=581382ac36ff`, port 8080, HTTPS-only ingress, a managed certificate, and one warm replica (`min=1`, `max=1`) so every WebSocket and HTTP action for an in-memory room reaches the same process. `/health` returns `{"build":"581382ac36ff","status":"ok"}`.
 
-No container engine or Azure credentials/CLI were available inside the worker, so the image could not be built here and the requested live deployment/URL verification could not honestly be performed. The repository does not modify infrastructure, DNS, or billing. The factory deployment stage should build this committed Dockerfile, route `open-quiz-arena.sociobot.in` to port 8080, set `BUILD_SHA`, keep at least one warm replica, and configure sticky sessions if using more than one replica.
+For another environment, build with `docker build --build-arg BUILD_SHA=<sha> -t open-quiz-arena .`. The runtime uses non-root UID/GID 10001. Horizontal replicas require WebSocket/session affinity or a shared ephemeral room coordinator.
 
 ## Known gaps and next steps
 
-- Live-domain health, mobile, accessibility, and real-round verification remain deployment-stage checks because this worker had no deployment authority/tooling.
-- The in-memory architecture is intentionally single-session-affinity. A future multi-replica design would need a shared pub/sub room coordinator while still enforcing room TTL and avoiding persistence.
-- Dockerfile syntax and both build stages are represented by equivalent local Cargo/npm builds, but the final container itself was not executed because Docker/Podman was absent.
+- The in-memory architecture is intentionally single-replica today. A future multi-replica design would need sticky affinity or a shared pub/sub room coordinator while still enforcing room TTL and avoiding persistence.
+- The service intentionally has no cross-session host history, analytics, or saved library; quiz share links are the durable handoff format.
