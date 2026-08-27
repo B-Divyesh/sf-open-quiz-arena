@@ -10,6 +10,7 @@ RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src ./src
+COPY src-web/public ./src-web/public
 ARG BUILD_SHA=unknown
 ENV BUILD_SHA=${BUILD_SHA}
 RUN cargo build --release --locked
