@@ -1,14 +1,73 @@
-# Open Quiz Arena: account-free live classroom quiz with no player cap
+# Open Quiz Arena
 
-Live: https://open-quiz-arena.sociobot.in — built by the Param Factory (`web-with-backend`).
+Open Quiz Arena is an account-free live classroom quiz for teachers and trainers who need every learner in the same game. A host types questions or imports CSV, opens an ephemeral six-digit room, and controls each reveal. Learners join from a phone with only a moderated nickname. Correct answers earn deterministic speed-weighted points; every round ends with a leaderboard and the game ends on a podium.
 
-See `.factory/brief.json` for the researched problem this solves and `.factory/design.md` for the visual system.
+There are no accounts, persistent quiz library, analytics, trackers, payments, homework mode, or paid player cap. Quiz share links store the quiz JSON in the URL fragment. Live room state exists only in server memory and expires automatically.
 
-## Develop
+## Stack
 
+- Rust 2021, Axum, Tokio, WebSockets, and in-memory room state
+- Vite with strict, framework-free TypeScript and CSS
+- Vitest for CSV/share-link utilities, Rust unit and route tests, Playwright for the multi-browser live loop
+- A non-root, multi-stage Alpine container
+
+## Run locally
+
+Requirements: Rust 1.85+ and Node 22+.
+
+```sh
+npm ci
+npm run build
+cargo run
 ```
-npm install
-npm run dev
+
+Open `http://localhost:8080`. `PORT` defaults to `8080`; `STATIC_DIR` defaults to `dist`. Set `BUILD_SHA` at compile time to expose the release identifier from `/health`.
+
+For split frontend/backend development, run `cargo run` and `npm run dev` in separate terminals. Vite proxies API and WebSocket traffic to port 8080.
+
+## Verify
+
+```sh
 npm test
-npm run build   # -> dist/
+npm run build
+npx playwright install chromium
+npm run test:e2e
+cargo clippy --all-targets -- -D warnings
 ```
+
+The end-to-end fixture imports and completes eight questions with three independently isolated players. The server test suite covers room lifecycle, unique codes, validation/limits, idempotent scoring, deterministic speed scores, reconnect tokens, host authorization, nickname sanitization, and expiry purge.
+
+For a basic load smoke against a running instance:
+
+```sh
+npx autocannon -c 20 -R 100 -d 10 http://localhost:8080/health
+```
+
+## CSV format
+
+Use a header row containing `question,answer1,answer2,correct`. Optional columns are `answer3`, `answer4`, and `time`. `correct` is a one-based answer number and `time` is 5–120 seconds.
+
+```csv
+question,answer1,answer2,answer3,answer4,correct,time
+Which planet is red?,Mars,Venus,Jupiter,Mercury,1,20
+```
+
+The importer supports quoted commas and reports every row error in a keyboard-focusable error summary.
+
+## Container
+
+```sh
+docker build --build-arg BUILD_SHA="$(git rev-parse --short HEAD)" -t open-quiz-arena .
+docker run --rm -p 8080:8080 open-quiz-arena
+curl http://localhost:8080/health
+```
+
+The runtime uses UID/GID 10001, contains no secrets, and writes no room data to disk. Deployment infrastructure, DNS, and billing are intentionally outside this repository.
+
+## Privacy and operating model
+
+Rooms expire after two idle hours; finished rooms expire after ten minutes. The only learner-supplied value is a sanitized nickname. Random host/player tokens live in browser session storage to enable reconnect. See `/privacy` and `/terms` in the running app.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
