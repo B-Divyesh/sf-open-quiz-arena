@@ -37,6 +37,7 @@ pub type SharedRoom = Arc<Mutex<Room>>;
 
 pub struct AppState {
     pub rooms: RwLock<HashMap<String, SharedRoom>>,
+    build_sha: String,
     rate_second: AtomicU64,
     rate_count: AtomicU64,
     rate_clients: StdMutex<HashMap<String, (u64, u32)>>,
@@ -44,12 +45,23 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
+        Self::with_build_sha(
+            std::env::var("BUILD_SHA").unwrap_or_else(|_| env!("BUILD_SHA").to_owned()),
+        )
+    }
+
+    pub fn with_build_sha(build_sha: impl Into<String>) -> Self {
         Self {
             rooms: RwLock::new(HashMap::new()),
+            build_sha: build_sha.into(),
             rate_second: AtomicU64::new(0),
             rate_count: AtomicU64::new(0),
             rate_clients: StdMutex::new(HashMap::new()),
         }
+    }
+
+    pub fn build_sha(&self) -> &str {
+        &self.build_sha
     }
 
     pub async fn create_room(&self, quiz: Quiz) -> (String, String) {
@@ -114,6 +126,7 @@ pub fn app(state: Arc<AppState>) -> Router {
     let spa = ServeFile::new(dist.join("index.html"));
     Router::new()
         .route("/health", get(health))
+        .route("/robots.txt", get(robots))
         .route("/api/rooms", post(create_room))
         .route("/api/rooms/{code}", get(room_status))
         .route("/api/rooms/{code}/join", post(join_room))
@@ -131,10 +144,16 @@ pub fn app(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-async fn health() -> Json<Value> {
-    Json(
-        json!({ "status": "ok", "build": std::env::var("BUILD_SHA").unwrap_or_else(|_| env!("BUILD_SHA").to_owned()) }),
+async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(json!({ "status": "ok", "build": state.build_sha }))
+}
+
+async fn robots() -> Response {
+    (
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        include_str!("../src-web/public/robots.txt"),
     )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -424,6 +443,10 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
     headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
     headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
     headers.insert(
+        "strict-transport-security",
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
+    headers.insert(
         "permissions-policy",
         HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
     );
@@ -600,5 +623,57 @@ mod tests {
             task.await.unwrap().unwrap();
         }
         assert_eq!(room.lock().await.players.len(), 40);
+    }
+    #[tokio::test]
+    async fn health_exposes_configured_build_sha_and_security_headers() {
+        let app = app(Arc::new(AppState::with_build_sha("21029cf3e036")));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("strict-transport-security").unwrap(),
+            "max-age=31536000; includeSubDomains"
+        );
+        let body: Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(body["status"], "ok");
+        assert_eq!(body["build"], "21029cf3e036");
+    }
+    #[tokio::test]
+    async fn robots_is_plain_text_and_not_the_spa_fallback() {
+        let app = app(Arc::new(AppState::with_build_sha("test")));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/robots.txt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("text/plain"));
+        assert_eq!(
+            response.headers().get("strict-transport-security").unwrap(),
+            "max-age=31536000; includeSubDomains"
+        );
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert!(std::str::from_utf8(&body)
+            .unwrap()
+            .starts_with("User-agent: *"));
     }
 }

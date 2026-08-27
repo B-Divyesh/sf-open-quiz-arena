@@ -4,6 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::broadcast;
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 pub const MAX_QUESTIONS: usize = 50;
 pub const ACTIVE_TTL: Duration = Duration::from_secs(2 * 60 * 60);
@@ -306,18 +307,79 @@ pub fn sanitize_nickname(value: &str) -> String {
     const BLOCKED: &[&str] = &["fuck", "shit", "bitch", "cunt", "nigger", "nigga", "faggot"];
     let mut cleaned: String = value
         .chars()
-        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '\'' | '’'))
+        // Keep letters, numbers, and combining marks from every script. The
+        // moderation check below uses a separate ASCII skeleton, so names do
+        // not need to be transliterated or otherwise changed for display.
+        .filter(|c| {
+            c.is_alphanumeric()
+                || is_combining_mark(*c)
+                || matches!(c, ' ' | '-' | '_' | '\'' | '’')
+        })
         .take(24)
         .collect();
     cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
     if cleaned.is_empty() {
         cleaned = "Player".into();
     }
-    let lower = cleaned.to_lowercase();
-    if BLOCKED.iter().any(|word| lower.contains(word)) {
+    let moderation_key = nickname_moderation_key(&cleaned);
+    if BLOCKED.iter().any(|word| moderation_key.contains(word)) {
         "Player".into()
     } else {
         cleaned
+    }
+}
+
+/// Produces a deliberately narrow moderation-only spelling key.
+///
+/// Spaces and nickname punctuation are removed so `f u c k` and `f-u-c-k`
+/// cannot evade the word list. NFKC handles compatibility forms, and the
+/// selected cross-script characters cover common visual substitutions without
+/// altering the Unicode name that is shown to classmates. Unknown non-ASCII
+/// letters form a boundary rather than being discarded, which avoids joining
+/// unrelated words in international names into a false match.
+fn nickname_moderation_key(value: &str) -> String {
+    value
+        .nfkc()
+        .flat_map(char::to_lowercase)
+        .filter_map(|character| {
+            ascii_homoglyph(character).or_else(|| {
+                (character.is_alphanumeric() || is_combining_mark(character)).then_some(' ')
+            })
+        })
+        .collect()
+}
+
+fn ascii_homoglyph(character: char) -> Option<char> {
+    match character {
+        'a'..='z' => Some(character),
+        // Frequently used Cyrillic, Greek, Armenian, and Latin lookalikes.
+        'а' | 'α' | 'ɑ' | '⍺' => Some('a'),
+        'в' | 'β' => Some('b'),
+        'с' | 'ϲ' => Some('c'),
+        'ԁ' => Some('d'),
+        'е' | 'ε' | '℮' => Some('e'),
+        'ғ' => Some('f'),
+        'ɡ' | 'ց' => Some('g'),
+        'һ' | 'հ' => Some('h'),
+        'і' | 'ι' | 'ı' => Some('i'),
+        'ј' => Some('j'),
+        'к' | 'κ' => Some('k'),
+        'ӏ' | 'ⅼ' => Some('l'),
+        'м' => Some('m'),
+        'п' => Some('n'),
+        'о' | 'ο' | 'օ' => Some('o'),
+        'р' | 'ρ' => Some('p'),
+        'ԛ' => Some('q'),
+        'г' => Some('r'),
+        'ѕ' | 'ʂ' => Some('s'),
+        'т' | 'τ' => Some('t'),
+        'υ' => Some('u'),
+        'ν' => Some('v'),
+        'ԝ' => Some('w'),
+        'х' | 'χ' => Some('x'),
+        'у' | 'γ' => Some('y'),
+        'ᴢ' => Some('z'),
+        _ => None,
     }
 }
 
@@ -405,6 +467,20 @@ mod tests {
         assert_eq!(room.players["1"].nickname, "Alexscript");
         assert_eq!(room.players["2"].nickname, "Alexscript · 2");
         assert_eq!(sanitize_nickname("shitty"), "Player");
+    }
+    #[test]
+    fn nickname_moderation_blocks_split_and_homoglyph_profanity_without_changing_names() {
+        assert_eq!(sanitize_nickname("f u c k"), "Player");
+        assert_eq!(sanitize_nickname("f-u-c-k"), "Player");
+        assert_eq!(sanitize_nickname("ѕhit"), "Player"); // Cyrillic small dze
+        assert_eq!(sanitize_nickname("ѕһіт"), "Player"); // mixed-script lookalikes
+        assert_eq!(
+            sanitize_nickname("<img src=x onerror=alert(1)>"),
+            "img srcx onerroralert1"
+        );
+        assert_eq!(sanitize_nickname("Мария"), "Мария");
+        assert_eq!(sanitize_nickname("नमस्ते"), "नमस्ते");
+        assert_eq!(sanitize_nickname("Zoë Dvořák"), "Zoë Dvořák");
     }
     #[test]
     fn lifecycle_and_expiry() {

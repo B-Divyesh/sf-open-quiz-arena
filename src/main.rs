@@ -31,7 +31,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .expect("bind server");
-    let build_sha = env::var("BUILD_SHA").unwrap_or_else(|_| env!("BUILD_SHA").to_owned());
+    let build_sha = state.build_sha();
     info!(%address, %build_sha, "server_started");
     axum::serve(listener, app(state))
         .with_graceful_shutdown(shutdown_signal())

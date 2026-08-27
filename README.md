@@ -21,7 +21,7 @@ npm run build
 cargo run
 ```
 
-Open `http://localhost:8080`. `PORT` defaults to `8080`; `STATIC_DIR` defaults to `dist`. Set `BUILD_SHA` at compile time to expose the release identifier from `/health`.
+Open `http://localhost:8080`. `PORT` defaults to `8080`; `STATIC_DIR` defaults to `dist`. Set `BUILD_SHA` to the full accepted commit SHA in the running environment; `/health` returns it as `{"status":"ok","build":"…"}`. The compiled value is only a fallback for local/container runs without a runtime value.
 
 For split frontend/backend development, run `cargo run` and `npm run dev` in separate terminals. Vite proxies API and WebSocket traffic to port 8080.
 
@@ -57,16 +57,22 @@ The importer supports quoted commas and reports every row error in a keyboard-fo
 ## Container
 
 ```sh
-docker build --build-arg BUILD_SHA="$(git rev-parse --short HEAD)" -t open-quiz-arena .
+docker build --build-arg BUILD_SHA="$(git rev-parse HEAD)" -t open-quiz-arena .
 docker run --rm -p 8080:8080 open-quiz-arena
 curl http://localhost:8080/health
 ```
 
 The runtime uses UID/GID 10001, contains no secrets, and writes no room data to disk. Deployment infrastructure, DNS, and billing are intentionally outside this repository.
 
+### Required deployment topology
+
+Live rooms and WebSocket fan-out are deliberately process-local and ephemeral. Until a shared ephemeral room coordinator (including cross-process pub/sub) exists, **run exactly one replica**: `minReplicas=1` and `maxReplicas=1`. Do not use a scale-to-zero or `0..3` deployment helper, load balancing, or an autoscaler for this service; any second process will not know rooms created by the first and valid joins/actions can return 404.
+
+For every deployment, inject `BUILD_SHA` with the full commit SHA of the image being deployed and confirm it through `/health`. The factory controller owns deployment; this repository must not deploy itself.
+
 ## Privacy and operating model
 
-Rooms expire after two idle hours; finished rooms expire after ten minutes. The only learner-supplied value is a sanitized nickname. Random host/player tokens live in browser session storage to enable reconnect. See `/privacy` and `/terms` in the running app.
+Rooms expire after two idle hours; finished rooms expire after ten minutes. The only learner-supplied value is a sanitized nickname. Random host/player tokens live in browser session storage to enable reconnect. Sociobot operates the public service; privacy requests can be sent to `privacy@sociobot.in`. See `/privacy` and `/terms` in the running app.
 
 ## License
 

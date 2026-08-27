@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
-const base = 'https://open-quiz-arena.sociobot.in';
-const wsBase = base.replace('https://', 'wss://');
+const base = process.env.BASE_URL || 'https://open-quiz-arena.sociobot.in';
+const wsBase = base.replace(/^http/, 'ws');
 const evidence = { checks: [], timings_ms: {} };
 const mark = (name, detail) => evidence.checks.push({ name, detail });
 
