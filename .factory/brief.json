@@ -1,0 +1,40 @@
+{
+  "slug": "open-quiz-arena",
+  "title": "Open Quiz Arena: account-free live classroom quiz with no player cap",
+  "user": "K-12/college teachers and trainers running a live review game for 20–35 students who hit Kahoot's 10-player free cap mid-lesson and don't want to buy or create student accounts.",
+  "evidence": [
+    {
+      "url": "https://triviaeverywhere.com/blog/kahoot-free-plan-guide/",
+      "date": "2026-03",
+      "quote_or_summary": "Kahoot free plan now allows max 10 players per session, down from 20; a typical class of 20–35 immediately exceeds it; users feel misled by free-trial terms."
+    },
+    {
+      "url": "https://www.triviaanywhere.com/blog/kahoot-free-player-limit",
+      "date": "2026-08",
+      "quote_or_summary": "Free tier once allowed 50 players; cap lowered over the years as features moved behind paid plans; cap 'bites mid-session' at events and classes."
+    },
+    {
+      "url": "https://rigorousthemes.com/blog/is-quizizz-actually-free-teacher-pricing-breakdown/",
+      "date": "2026-01",
+      "quote_or_summary": "Quizizz (now Wayground) free tier tightened in 2025: saved activities capped at 20, individual upgrade price no longer public."
+    },
+    {
+      "url": "https://spellingjoy.com/best-apps/gimkit-alternatives",
+      "date": "2026-01",
+      "quote_or_summary": "Gimkit free plan surfaces only ~3 rotating modes; the rest and the assignment tool sit behind Pro at ~$60/yr; teachers on tight budgets keep hunting for free options."
+    }
+  ],
+  "recurrence": "Continuous, high-volume: every 'Kahoot alternative' guide in 2025–26 leads with the player cap; multiple independent tools (TriviaMaker, Nontrivial, Trivia Anywhere) launched to exploit it. Severity: blocks a lesson in progress.",
+  "current_workaround": "Split class into teams sharing one phone, use Blooket, run multiple sessions, or pay $4–8/mo.",
+  "incumbents_and_gap": "Kahoot (10-player free cap), Wayground/Quizizz (20 saved activities, MC-only live), Gimkit (modes paywalled), Blooket (free but account-bound, gamified skins). Gap: a zero-account, zero-cap live quiz where the quiz lives in a shareable link/JSON and runs off a single host screen.",
+  "smallest_useful_product": "Host pastes or types Q/A (or imports CSV), gets a 6-digit room code; students join from any phone browser, no login. Core loop: question appears on host screen, students tap answer on phone, speed-weighted points, leaderboard between questions, podium at end. Quizzes saved as URL-encoded/JSON links (no server persistence needed beyond the live room). Deliberately does NOT do: student accounts, homework mode, analytics dashboards, AI question generation, image search.",
+  "success_measure": "≥60% of hosted rooms reach ≥11 joined players; ≥40% of hosts run a second room within 14 days; median room completes ≥8 questions without disconnect complaints.",
+  "artifact_class": "web-with-backend",
+  "monetization": "free — value is precisely the absence of a cap; optional one-time 'host pack' (themes, exports) later, never a player cap.",
+  "constraints": "Realtime fan-out to 40+ phones on school Wi-Fi (WebSocket + reconnect); COPPA/GDPR: collect no student identifiers beyond a nickname, purge rooms after end; content moderation of nicknames; must not copy Kahoot's trade dress/music.",
+  "est_build_effort": "M",
+  "why_distinct": "Not a Kahoot clone in business model or data model: no accounts, no library, quiz-as-link, uncapped by design; the host screen is the product, not a SaaS dashboard.",
+  "confidence": 4,
+  "territory": "games-creative",
+  "state": "RESEARCHED"
+}
