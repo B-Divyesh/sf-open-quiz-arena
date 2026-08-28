@@ -126,6 +126,7 @@ pub fn app(state: Arc<AppState>) -> Router {
     let spa = ServeFile::new(dist.join("index.html"));
     let apple_icon = ServeFile::new(dist.join("apple-touch-icon.png"));
     let open_graph = ServeFile::new(dist.join("open-graph.png"));
+    let not_found_css = ServeFile::new(dist.join("not-found.css"));
     let sitemap = ServeFile::new(dist.join("sitemap.xml"));
     Router::new()
         .route("/health", get(health))
@@ -133,6 +134,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route_service("/sitemap.xml", sitemap)
         .route_service("/apple-touch-icon.png", apple_icon)
         .route_service("/open-graph.png", open_graph)
+        .route_service("/not-found.css", not_found_css)
         .route("/api/rooms", post(create_room))
         .route("/api/rooms/{code}", get(room_status))
         .route("/api/rooms/{code}/join", post(join_room))
@@ -158,11 +160,12 @@ pub fn app(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-async fn not_found_page() -> Response {
+async fn not_found_page(State(state): State<Arc<AppState>>) -> Response {
+    let build = state.build_sha.chars().take(12).collect::<String>();
     (
         StatusCode::NOT_FOUND,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        include_str!("../src-web/public/404.html"),
+        include_str!("../src-web/public/404.html").replace("__BUILD_SHA__", &build),
     )
         .into_response()
 }

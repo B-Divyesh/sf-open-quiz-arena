@@ -42,36 +42,42 @@ function route(restoreScroll = false): void {
   closeSocket();
   const path = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
+  const demoRoute = path === '/demo' || params.get('demo') === '1';
+  if (!demoRoute) clearDemoStorage();
   if (path === '/privacy') renderLegal('Privacy');
   else if (path === '/terms') renderLegal('Terms');
   else if (path === '/create') renderEditor();
-  else if (path === '/demo' || params.get('demo') === '1') renderDemo();
+  else if (demoRoute) renderDemo();
   else if (path === '/host' && params.get('room')) restoreHost(params.get('room')!);
   else if (path === '/play' && params.get('room')) void renderNickname(params.get('room')!);
   else if (path === '/play') renderJoin();
   else if (path === '/' ) renderHome();
   else renderNotFound();
   if (!restoreScroll) window.scrollTo(0, 0);
-  completeRoute(path, restoreScroll, moveFocus);
+  completeRoute(demoRoute ? '/demo' : path, restoreScroll, moveFocus);
 }
 
 function navigate(path: string): void { history.replaceState({ scrollY: window.scrollY }, ''); history.pushState({ scrollY: 0 }, '', path); route(); }
 
 function completeRoute(path: string, restoreScroll: boolean, moveFocus: boolean): void {
-  const page: [string, string] = path === '/demo' ? ['Demo — Open Quiz Arena', 'Try a sample live quiz with host controls and sample learners.'] : path === '/create' ? ['Create a quiz — Open Quiz Arena', 'Create a live classroom quiz and open a room code.'] : path === '/play' ? ['Join a quiz — Open Quiz Arena', 'Join a live classroom quiz with a room code and nickname.'] : path === '/privacy' ? ['Privacy — Open Quiz Arena', 'How temporary live quiz rooms handle data.'] : path === '/terms' ? ['Terms — Open Quiz Arena', 'Terms for using Open Quiz Arena.'] : path === '/404' ? ['Page not found — Open Quiz Arena', 'This page does not exist.'] : ['Open Quiz Arena — live classroom quizzes', 'Teachers and trainers run live quizzes. Learners join by code and answer on their phones.'];
+  const page: [string, string] = path === '/demo' ? ['Demo — Open Quiz Arena', 'Try a sample live quiz with host controls and sample learners.'] : path === '/create' ? ['Create a quiz — Open Quiz Arena', 'Create a live classroom quiz and open a room code.'] : path === '/play' ? ['Join a quiz — Open Quiz Arena', 'Join a live classroom quiz with a room code and nickname.'] : path === '/host' ? ['Host a quiz — Open Quiz Arena', 'Control questions, answers, rankings, and the final podium.'] : path === '/privacy' ? ['Privacy — Open Quiz Arena', 'How temporary live quiz rooms handle data.'] : path === '/terms' ? ['Terms — Open Quiz Arena', 'Terms for using Open Quiz Arena.'] : path === '/404' ? ['Page not found — Open Quiz Arena', 'This page does not exist.'] : ['Open Quiz Arena — quizzes tested with 40 learners', 'Teachers and trainers run live quizzes tested with 40 learners. Each learner joins by code on a phone.'];
   document.title = page[0];
   document.querySelector('meta[name="description"]')?.setAttribute('content', page[1]);
   document.querySelector('link[rel="canonical"]')?.setAttribute('href', `${location.origin}${path === '/404' ? '/404' : path}`);
+  document.querySelector('meta[property="og:title"]')?.setAttribute('content', page[0]);
+  document.querySelector('meta[property="og:description"]')?.setAttribute('content', page[1]);
+  document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', page[0]);
+  document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', page[1]);
   requestAnimationFrame(() => requestAnimationFrame(() => { if (moveFocus) { const heading = document.querySelector<HTMLElement>('main h1'); heading?.setAttribute('tabindex', '-1'); heading?.focus({ preventScroll: true }); announce(page[0]); } window.scrollTo(0, restoreScroll ? Number((history.state as { scrollY?: number } | null)?.scrollY ?? 0) : 0); }));
 }
 function announce(message: string): void { let status = document.querySelector<HTMLElement>('#route-status'); if (!status) { status = document.createElement('p'); status.id = 'route-status'; status.className = 'sr-only'; status.setAttribute('aria-live', 'polite'); document.body.append(status); } status.textContent = message; }
 
 function renderHome(): void {
   app.innerHTML = shell(`<section class="hero">
-    <div class="hero-copy"><p class="eyebrow"><span></span> Free live classroom quiz</p><h1>Run a live classroom quiz for everyone.</h1>
+    <div class="hero-copy"><p class="eyebrow"><span></span> Free live classroom quiz</p><h1>Run one live quiz for your class.</h1>
       <p class="lede">Teachers and trainers host. Learners join by code and answer on their phones.</p>
       <div class="hero-actions"><button class="button button--lime" data-nav="/demo">Try it with sample data <span aria-hidden="true">→</span></button><span class="action-note">Opens a sample host screen with learners already joined.</span><button class="button button--ghost" data-nav="/create">Create a quiz</button><button class="button button--ghost" data-nav="/play">Join a room</button></div>
-      <ul class="trust-row" aria-label="Key facts"><li>Free</li><li>No accounts</li><li>Internet required</li></ul>
+      <ul class="trust-row" aria-label="Key facts"><li>Free</li><li>No accounts</li><li>Internet required</li><li>Tested with 40 learners in one room</li></ul>
     </div>
     <div class="arena-preview" aria-label="Illustration of a live quiz scoreboard">
       <div class="preview-head"><span>LIVE · Q 4/8</span><span>27 PLAYING</span></div>
@@ -101,15 +107,20 @@ function renderDemo(): void {
   document.querySelectorAll<HTMLElement>('[data-demo-answer]').forEach(button => button.addEventListener('click', () => { demoAnswers.add(button.dataset.demoAnswer ?? ''); persistDemo(); renderDemo(); }));
   document.querySelector('#demo-reveal')?.addEventListener('click', () => { demoStep = 2; persistDemo(); renderDemo(); });
   document.querySelector('#demo-podium')?.addEventListener('click', renderDemoPodium);
-  document.querySelector('#reset-demo')?.addEventListener('click', () => { localStorage.removeItem('demo:open-quiz-arena:step'); demoStep = 0; demoAnswers.clear(); renderDemo(); });
-  document.querySelector('#start-real')?.addEventListener('click', () => { localStorage.removeItem('demo:open-quiz-arena:step'); demoStep = 0; demoAnswers.clear(); navigate('/create'); });
+  document.querySelector('#reset-demo')?.addEventListener('click', resetDemo);
+  document.querySelector('#start-real')?.addEventListener('click', startForReal);
 }
 function persistDemo(): void { localStorage.setItem('demo:open-quiz-arena:step', String(demoStep)); }
+function clearDemoStorage(): void {
+  Object.keys(localStorage).filter(key => key.startsWith('demo:open-quiz-arena:')).forEach(key => localStorage.removeItem(key));
+}
+function resetDemo(): void { clearDemoStorage(); demoStep = 0; demoAnswers.clear(); renderDemo(); }
+function startForReal(): void { clearDemoStorage(); demoStep = 0; demoAnswers.clear(); navigate('/create'); }
 function renderDemoPodium(): void {
   app.innerHTML = shell(`<section class="board podium"><p class="eyebrow"><span></span> Sample result</p><h1>Sample podium.</h1><div class="podium-steps"><div class="podium-place podium-place--1"><span>2</span><strong>Ibrahim</strong><small>996 pts</small></div><div class="podium-place podium-place--2"><span>1</span><strong>Maya</strong><small>998 pts</small></div><div class="podium-place podium-place--3"><span>3</span><strong>Lena</strong><small>994 pts</small></div></div><div class="final-actions"><button class="button button--lime" id="reset-demo">Run the sample again</button></div></section>`, { demo: true, compact: true });
   bindGlobal();
-  document.querySelector('#reset-demo')?.addEventListener('click', () => { localStorage.removeItem('demo:open-quiz-arena:step'); demoStep = 0; demoAnswers.clear(); renderDemo(); });
-  document.querySelector('#start-real')?.addEventListener('click', () => navigate('/create'));
+  document.querySelector('#reset-demo')?.addEventListener('click', resetDemo);
+  document.querySelector('#start-real')?.addEventListener('click', startForReal);
 }
 function renderNotFound(): void { app.innerHTML = shell(`<section class="center-panel"><p class="eyebrow"><span></span> 404</p><h1>Page not found.</h1><p>This address does not lead to a quiz, demo, or policy page.</p><div class="hero-actions"><button class="button button--lime" data-nav="/">Go home</button><button class="button button--ghost" data-nav="/demo">Try the sample quiz</button></div></section>`); bindGlobal(); }
 
@@ -179,7 +190,7 @@ function bindEditor(): void {
     const button = form.querySelector<HTMLButtonElement>('[data-testid="create-room"]'); button?.setAttribute('disabled', '');
     try {
       const result = await api<{ code: string; host_token: string }>('/api/rooms', { method: 'POST', body: JSON.stringify({ quiz: draft }) });
-      sessionStorage.setItem(`arena:host:${result.code}`, result.host_token); sessionStorage.setItem(`arena:quiz:${result.code}`, JSON.stringify(draft)); history.replaceState({}, '', `/host?room=${result.code}`); connectHost(result.code, result.host_token);
+      sessionStorage.setItem(`arena:host:${result.code}`, result.host_token); sessionStorage.setItem(`arena:quiz:${result.code}`, JSON.stringify(draft)); history.replaceState({}, '', `/host?room=${result.code}`); connectHost(result.code, result.host_token); completeRoute('/host', false, false);
     } catch (reason) { renderEditor(messageOf(reason)); }
   });
 }

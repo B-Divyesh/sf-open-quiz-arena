@@ -1,10 +1,10 @@
 # Open Quiz Arena
 
-Run a live classroom quiz for everyone.
+Run one live quiz for your class.
 
-Teachers and trainers create questions, share a six-digit room code, and reveal each result. Learners join with a nickname on a phone.
+Teachers and trainers create questions, share a six-digit room code, and reveal each result. The live room is tested with 40 learners.
 
-Try the isolated sample at `/demo` or `/?demo=1`. It uses sample learners and a separate `demo:open-quiz-arena:*` browser-storage namespace. Reset demo clears that namespace. Start for real clears it and opens the quiz editor.
+Try the isolated sample at `/demo` or `/?demo=1`. The sample uses preset learners and separate demo storage. Reset demo removes that sample progress. Start for real removes it and opens the quiz editor.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --locked -- -D warnings
 ```
 
-Every public product claim and its command are listed in [`.factory/claims.json`](.factory/claims.json). The browser suite covers CSV imports, quiz links, room entry, the full host/player loop, mobile layout, routing, metadata, privacy requests, and accessibility checks.
+Every public product claim and its command are listed in [`.factory/claims.json`](.factory/claims.json). Run `npm run test:e2e` for browser checks. See `.factory/claims.json` for each public promise and its test.
 
 ## CSV format
 

@@ -1,1 +1,1 @@
-Run live classroom quizzes where learners join by code and answer on their phones.
+Run live classroom quizzes tested with 40 learners, with no accounts.

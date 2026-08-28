@@ -36,3 +36,30 @@ test('brand, footer, and legal links are 44px touch targets at mobile width', as
   await expectTarget('main a[href="/privacy"]');
   await expectTarget('a[href^="mailto:privacy@sociobot.in"]');
 });
+
+test('the 390px first screen keeps the job, audience, sample action, and facts in view', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await page.goto('/');
+  for (const locator of [page.getByRole('heading', { level: 1 }), page.locator('.lede'), page.getByRole('button', { name: /Try it with sample data/ }), page.locator('.action-note'), page.locator('.trust-row')]) {
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+  }
+  await expect(page.getByText('Tested with 40 learners in one room')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await context.close();
+});
+
+test('every public route has one main heading and no serious accessibility issue', async ({ page }) => {
+  for (const path of ['/', '/demo', '/?demo=1', '/create', '/play', '/privacy', '/terms', '/definitely-missing']) {
+    await page.goto(path);
+    expect(await page.locator('main').count(), `${path} main count`).toBe(1);
+    expect(await page.locator('h1').count(), `${path} h1 count`).toBe(1);
+    expect(await page.locator('html').getAttribute('lang'), `${path} language`).toBe('en');
+    expect(await page.title(), `${path} title`).not.toBe('');
+    const audit = await new AxeBuilder({ page }).analyze();
+    expect(audit.violations.filter(issue => ['serious', 'critical'].includes(issue.impact ?? '')), `${path} Axe violations`).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${path} horizontal overflow`).toBe(true);
+  }
+});

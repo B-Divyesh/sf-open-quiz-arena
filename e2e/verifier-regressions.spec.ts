@@ -40,3 +40,12 @@ test('health, HSTS, robots, and favicon responses are valid public infrastructur
   expect(favicon.headers()['content-type']).toContain('image/svg+xml');
   await expect(favicon.text()).resolves.toMatch(/^<svg\b/);
 });
+
+test('server rate limits a forwarded client with 429 and Retry-After', async ({ request }) => {
+  const responses = await Promise.all(Array.from({ length: 190 }, () => request.get('/health', {
+    headers: { 'x-forwarded-for': '203.0.113.42' },
+  })));
+  const limited = responses.filter(response => response.status() === 429);
+  expect(limited.length).toBeGreaterThan(0);
+  expect(limited.every(response => response.headers()['retry-after'] === '1')).toBe(true);
+});

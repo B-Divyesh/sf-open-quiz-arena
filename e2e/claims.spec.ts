@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('@claim:demo-sandbox opens a seeded, isolated sample and resets it', async ({ page }) => {
+test('@claim:demo-sandbox opens both demo URLs, resets them, and leaves no sample progress', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', request => requests.push(request.url()));
   await page.goto('/demo');
@@ -16,6 +16,63 @@ test('@claim:demo-sandbox opens a seeded, isolated sample and resets it', async 
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await expect(page.getByRole('button', { name: 'Start sample question' })).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+
+  await page.goto('/?demo=1');
+  await expect(page).toHaveTitle('Demo — Open Quiz Arena');
+  await expect(page.getByText('Demo — sample data, nothing is saved')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '046610' })).toBeVisible();
+  await page.getByRole('button', { name: 'Start sample question' }).click();
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['demo:open-quiz-arena:step']);
+  await page.getByRole('button', { name: 'Reset demo' }).click();
+  await expect(page.getByRole('button', { name: 'Start sample question' })).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+
+  await page.getByRole('button', { name: 'Start sample question' }).click();
+  await page.getByRole('button', { name: 'Start for real' }).click();
+  await expect(page).toHaveURL(/\/create$/);
+  await expect(page).toHaveTitle('Create a quiz — Open Quiz Arena');
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('demo:')))).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('arena:')))).toEqual([]);
+  expect(requests.every(url => new URL(url).origin === new URL(page.url()).origin)).toBe(true);
+  expect(requests.some(url => new URL(url).pathname.startsWith('/api/') || new URL(url).pathname.startsWith('/ws/'))).toBe(false);
+});
+
+test('@claim:room-capacity-40 joins 40 learners and delivers each live room state', async ({ page }) => {
+  await page.goto('/demo');
+  const result = await page.evaluate(async () => {
+    const quiz = { title: 'Capacity check', questions: [{ prompt: 'Ready?', answers: ['Yes', 'No'], correct_index: 0, time_limit_seconds: 20 }] };
+    const createdResponse = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quiz }) });
+    const created = await createdResponse.json() as { code: string; host_token: string };
+    const joins = await Promise.all(Array.from({ length: 40 }, async (_, index) => {
+      const nickname = `Learner ${String(index + 1).padStart(2, '0')}`;
+      const response = await fetch(`/api/rooms/${created.code}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nickname }) });
+      return { status: response.status, nickname, ...(await response.json() as { player_token: string }) };
+    }));
+    const wsOrigin = location.origin.replace(/^http/, 'ws');
+    const sockets: WebSocket[] = [];
+    const readState = (role: 'host' | 'player', token: string) => new Promise<{ player_count: number; nickname?: string }>((resolve, reject) => {
+      const socket = new WebSocket(`${wsOrigin}/ws/${created.code}?role=${role}&token=${encodeURIComponent(token)}`);
+      sockets.push(socket);
+      const timeout = window.setTimeout(() => reject(new Error(`Timed out waiting for ${role} room state`)), 10_000);
+      socket.addEventListener('error', () => { window.clearTimeout(timeout); reject(new Error(`${role} socket failed`)); }, { once: true });
+      socket.addEventListener('message', event => {
+        const state = JSON.parse(String(event.data)) as { player_count: number; me?: { nickname: string } };
+        window.clearTimeout(timeout);
+        resolve({ player_count: state.player_count, nickname: state.me?.nickname });
+      }, { once: true });
+    });
+    const playerStates = await Promise.all(joins.map(join => readState('player', join.player_token)));
+    const hostState = await readState('host', created.host_token);
+    sockets.forEach(socket => socket.close());
+    return {
+      joined: joins.filter(join => join.status === 201).length,
+      hostCount: hostState.player_count,
+      playerCount: playerStates.length,
+      everyPlayerSaw40: playerStates.every(state => state.player_count === 40),
+      uniqueNames: new Set(playerStates.map(state => state.nickname)).size,
+    };
+  });
+  expect(result).toEqual({ joined: 40, hostCount: 40, playerCount: 40, everyPlayerSaw40: true, uniqueNames: 40 });
 });
 
 test('@claim:no-accounts-and-free-access demo starts without a sign-in or payment request', async ({ page }) => {
@@ -133,9 +190,29 @@ test('@claim:route-metadata-and-404 gives each route a title and missing paths a
   await expect(page).toHaveTitle('Privacy — Open Quiz Arena');
   await page.goto('/demo');
   await expect(page).toHaveTitle('Demo — Open Quiz Arena');
+  await page.goto('/?demo=1');
+  await expect(page).toHaveTitle('Demo — Open Quiz Arena');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/demo$/);
   const missing = await request.get('/definitely-missing');
   expect(missing.status()).toBe(404);
   expect(await missing.text()).toContain('Page not found.');
+  const consoleErrors: string[] = [];
+  page.on('console', message => {
+    if (message.type() === 'error' && !/Failed to load resource: the server responded with a status of 404/.test(message.text())) consoleErrors.push(message.text());
+  });
+  const missingPage = await page.goto('/definitely-missing');
+  expect(missingPage?.status()).toBe(404);
+  await expect(page).toHaveTitle('Page not found — Open Quiz Arena');
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /does not exist/);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Page not found — Open Quiz Arena');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/404$/);
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Open Quiz Arena home' })).toBeVisible();
+  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Privacy' })).toBeVisible();
+  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Terms' })).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(7, 21, 43)');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(consoleErrors).toEqual([]);
   expect((await request.get('/sitemap.xml')).status()).toBe(200);
   expect((await request.get('/apple-touch-icon.png')).headers()['content-type']).toContain('image/png');
 });
