@@ -81,4 +81,4 @@ Candidate repaired from `04661e3c36d0f7c0aa56b8700426ff5b1923a4a5`; review basel
 
 - Browser tests: Playwright output and traces under `test-results/` when retained.
 - Route screenshot/check substitute: `.factory/verify-url.sh http://127.0.0.1:8080/{,demo}`.
-- Live URL check after deployment: `https://open-quiz-arena.sociobot.in`, `/demo`, `/privacy`, `/definitely-missing` (recorded in handoff).
+- Live URL check after deployment: `https://open-quiz-arena.sociobot.in`, `/demo`, `/privacy`, and `/definitely-missing` all passed on revision `sf-open-quiz-arena--0000005`; the last returned HTTP 404. Full live browser suite: desktop 16/16 and mobile 2/2.

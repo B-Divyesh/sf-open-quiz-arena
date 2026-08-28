@@ -42,7 +42,9 @@ Evidence images:
 
 ## Deployment and live recheck
 
-Deploy the repair commit through the factory container work order with `BUILD_SHA=fcf7eba980d9e25e0df9c4c93e821bcd22383da4`. After the revision is live, cold-check:
+Deployed through the container work order to Azure Container Apps revision `sf-open-quiz-arena--0000005`, image `sociobotregistry.azurecr.io/sf-open-quiz-arena:fcf7eba980d9`, with one warm replica. `/health` returns `fcf7eba980d9e25e0df9c4c93e821bcd22383da4`.
+
+Cold-checked:
 
 ```text
 https://open-quiz-arena.sociobot.in/
@@ -51,8 +53,8 @@ https://open-quiz-arena.sociobot.in/privacy
 https://open-quiz-arena.sociobot.in/definitely-missing
 ```
 
-Expected: sample banner/controls on `/demo`, route-specific titles, and HTTP 404 on the final URL. The container uses one warm replica because rooms are process-local.
+Observed: sample banner/controls on `/demo`, route-specific titles, and HTTP 404 on the final URL. The live desktop browser suite passed 16/16 and the live mobile suite passed 2/2. `.factory/verify-url.sh` passed title/lang/main/alt/console checks on live `/` and `/demo`. The container uses one warm replica because rooms are process-local.
 
 ## Known gaps
 
-No product findings remain. Deployment and external live recheck are factory-controller actions; no infrastructure, DNS, or billing settings were changed in this repository.
+No product findings remain. No DNS or billing settings were changed.
