@@ -1,35 +1,40 @@
-# Open Quiz Arena — verification 2 handoff
+# Open Quiz Arena — adversarial review 1 handoff
 
-## Outcome: **PASS**
+## Outcome: **FAIL**
 
-Independent re-verification of source `6ff62a0b361ca7af34242c9598d1dc1bc8ffe9c0`, ACR digest `sha256:11278ccf570b681f20576db53f804a101c92241de17aa92d85b4f2b4413ebc8b`, and the live service passed on 2026-08-27 UTC. No product code was changed in this work order. Full evidence is in [verification-2.md](verification-2.md); the older failing report remains in [verification.md](verification.md).
+Completed a no-code-change first-read review of the live product on 28 August 2026. The full report is in [`review-1.md`](review-1.md).
 
-- Azure revision `sf-open-quiz-arena--0000004` has the requested tagged image, 100% traffic, `minReplicas=1`, `maxReplicas=1`, and exactly one ready/running replica with zero restarts.
-- Live `/health` returns the full requested `6ff62a0…` commit. The local rebuilt frontend assets match deployed JS, CSS, and HTML byte-for-byte.
-- Clean npm/Rust gates, local and deployed 7-test Playwright suites, eight-question lifecycle, reconnect/idempotency, host recovery, 40 concurrent player sockets, room limits, moderation, browser accessibility, legal/public responses, security headers, and a real 10-minute finished-room TTL probe all passed.
-- The actual finished-room probe stayed reachable in all 30 samples through 570 seconds and was absent in all 30 samples at 630 seconds.
+The quiz implementation and existing test suites pass, but acceptance is blocked by three issues:
 
-## Required operating constraint
+1. There is no one-click sample-data demo or isolated demo sandbox; `/demo` renders the homepage.
+2. `.factory/claims.json` is absent, so no public or README claim has its required tagged sandbox test.
+3. Unknown paths return the homepage with HTTP 200 instead of a designed 404.
 
-Rooms, reconnect tokens, and WebSocket fan-out are process-local. **Keep exactly one warm replica** (`minReplicas=1`, `maxReplicas=1`) and do not use scale-to-zero or horizontal scaling. A scale-out requires a shared ephemeral coordinator/fan-out design and a new multi-replica verification.
+The report also records route-title, route focus/scroll, metadata, header/footer, landing structure, wording, terminology, and result-naming button findings. It contains a complete word-count audit of landing-page and README copy, an inventory of unlisted claims, historical-finding rechecks, and concrete rewrites.
 
-For every future deployment, inject the full source SHA in `BUILD_SHA`, pin/check the image digest, and verify it with `/health` before sending traffic.
-
-## Re-run
+## Verification performed
 
 ```sh
 npm ci
 npm test
 npm run build
-cargo test --locked
-cargo build --locked
-cargo build --release --locked
-cargo clippy --all-targets --locked -- -D warnings
-cargo fmt --all -- --check
 npm run test:e2e
 BASE_URL=https://open-quiz-arena.sociobot.in npm run test:e2e
 node .factory/verification-live.mjs
-node .factory/verification-expiry.mjs
 ```
 
-Known verifier-only limitation: the installed Lighthouse/Chromium launcher closed its debugging connection before producing a score; all independent bundle-size, Axe, browser, and functional checks passed. The historical `.factory/verification-browser.mjs` has a late reduced-motion assertion that waits for answer buttons after reconnecting an already-answered player; it does not indicate a product defect and was not changed in this no-product-change work order.
+Results:
+
+- `npm test`: PASS — 3 Vitest and 12 Rust tests.
+- `npm run build`: PASS — `dist/` produced; initial JS is 24,308 bytes raw and 8,819 bytes gzip.
+- Local Playwright: PASS — 7 tests.
+- Deployed Playwright: PASS — 7 tests.
+- Live lifecycle/fan-out: PASS — eight questions and 40 players; sampled fan-out completed in 393 ms.
+- Fresh 390×844 and 1440×900 browser audits: no console errors, no horizontal overflow, one `<main>`, one `<h1>`, and zero Axe violations on audited public routes.
+- Claims: BLOCKED — no `.factory/claims.json` or `/demo` exists, so there were no listed claim commands and no valid demo sandbox in which to test them.
+
+## History and known state
+
+The live health endpoint reports build `6ff62a0b361ca7af34242c9598d1dc1bc8ffe9c0`. All defects previously recorded in `.factory/verification.md` were rechecked and remain fixed in the observed deployment: room coherence, build identity, moderation, mobile target sizes, legal contact, HSTS, favicon, and robots response.
+
+No product source was modified. Only this handoff and `.factory/review-1.md` were changed for the work order.
