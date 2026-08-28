@@ -7,7 +7,7 @@ COPY src-web ./src-web
 COPY tests-web ./tests-web
 RUN npm ci && npm run build
 
-FROM rust:1.98-alpine AS service
+FROM rust:1-alpine AS service
 RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./

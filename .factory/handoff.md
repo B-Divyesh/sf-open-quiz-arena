@@ -10,6 +10,8 @@ The release now states and proves a useful classroom size, supports both one-cli
 
 Source repair `bc4a928993ba6b94ed9b2be5f3d501343582f33c` was cloned without shared working files at `/tmp/open-quiz-arena-polish-2.KLE1dc`.
 
+The evidence commit `7a595fc329a9df0e88df6edebb16353a6f7c6050` was cloned again at `/tmp/open-quiz-arena-polish-2-final.1khQ73`; every claim command passed independently there as well.
+
 - `npm ci`: 61 packages, zero audit vulnerabilities.
 - `npm test`: 3 Vitest tests and 12 Rust tests passed.
 - `npm run build`: produced `dist/`; initial JS 31,420 bytes raw / 10,268 gzip and CSS 20,266 bytes raw / 5,227 gzip.
@@ -21,6 +23,7 @@ Source repair `bc4a928993ba6b94ed9b2be5f3d501343582f33c` was cloned without shar
 - Local worker URL verification passed `/` and `/?demo=1` with one h1, `lang=en`, a main landmark, complete image/button labels, and zero console errors.
 - Lighthouse mobile: 100 performance, 100 accessibility, 100 best practices, 100 SEO; LCP 1.2s, CLS 0, TBT 20ms.
 - The catalog description is verb-first and 69 characters.
+- The Azure registry build passed with the required rolling `rust:1-alpine` builder and no `.git` dependency.
 
 Committed local visual evidence:
 

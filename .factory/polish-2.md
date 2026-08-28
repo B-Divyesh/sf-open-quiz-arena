@@ -87,6 +87,7 @@ Every finding from reviews 1 and 2 is mapped below. “Reverified” means the e
 
 - Local screenshots and verifier output: `.factory/evidence/polish-2-local/home/`, `.factory/evidence/polish-2-local/demo-query/`, `.factory/evidence/polish-2-local/404-mobile.png`, and `.factory/evidence/polish-2-local/404-desktop.png`.
 - Clean-clone commit/path: `bc4a928993ba6b94ed9b2be5f3d501343582f33c` at `/tmp/open-quiz-arena-polish-2.KLE1dc`.
+- Final evidence clone: `7a595fc329a9df0e88df6edebb16353a6f7c6050` at `/tmp/open-quiz-arena-polish-2-final.1khQ73`; all 14 registry commands passed separately.
 - Clean-clone gates: `npm ci`; `npm test` (3 TypeScript + 12 Rust); `npm run build`; all 14 claim commands individually; `cargo fmt`; `cargo clippy -D warnings`; full Playwright 24/24.
 - Local browser evidence: all public routes passed Axe with zero serious/critical findings and no horizontal overflow. The 390×844 first screen kept the job, audience, demo action, explanation, and facts above the fold.
 - Local performance: Lighthouse mobile scores 100 performance, 100 accessibility, 100 best practices, and 100 SEO; LCP 1.2s, CLS 0, TBT 20ms.
