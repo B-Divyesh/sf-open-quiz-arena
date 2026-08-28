@@ -20,38 +20,58 @@ let socketRole: 'host' | 'player' | undefined;
 let socketCode = '';
 let socketToken = '';
 let connectionStatus: 'connecting' | 'live' | 'offline' = 'connecting';
+let demoStep = 0;
+let demoAnswers = new Set<string>();
+const demoQuiz: Quiz = { title: 'Climate check', questions: [{ prompt: 'Which action saves the most household electricity?', answers: ['Turn off idle devices', 'Leave lights on', 'Open the freezer', 'Run an empty washer'], correct_index: 0, time_limit_seconds: 20 }] };
+let firstRoute = true;
 
 function blankQuestion(): Question { return { prompt: '', answers: ['', '', '', ''], correct_index: 0, time_limit_seconds: 20 }; }
 function escapeHtml(value: unknown): string { return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character); }
-function shell(content: string, options: { compact?: boolean } = {}): string {
+function shell(content: string, options: { compact?: boolean; demo?: boolean } = {}): string {
   return `<div class="site-shell ${options.compact ? 'site-shell--compact' : ''}">
-    <header class="topbar"><a class="brand" href="/" data-route aria-label="Open Quiz Arena home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>OPEN QUIZ ARENA</span></a><span class="no-account">No accounts. No player cap.</span></header>
+    <header class="topbar"><a class="brand" href="/" data-route aria-label="Open Quiz Arena home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>OPEN QUIZ ARENA</span></a><nav class="site-nav" aria-label="Main navigation"><a href="/demo" data-route>Demo</a><a href="/create" data-route>Create</a><a href="/play" data-route>Join</a><a href="/privacy" data-route>Privacy</a></nav></header>
+    ${options.demo ? `<aside class="demo-banner" aria-label="Demo controls"><strong>Demo — sample data, nothing is saved</strong><span><button class="demo-link" id="reset-demo">Reset demo</button><button class="demo-link" id="start-real">Start for real</button></span></aside>` : ''}
     <main id="main" tabindex="-1">${content}</main>
-    <footer><span>Built for the whole room.</span><nav aria-label="Legal"><a href="/privacy" data-route>Privacy</a><a href="/terms" data-route>Terms</a></nav></footer>
+    <footer><span>Free live classroom quizzes. No accounts.</span><nav aria-label="Legal"><a href="/privacy" data-route>Privacy</a><a href="/terms" data-route>Terms</a><span>Built by Param Factory · ${escapeHtml((import.meta.env.VITE_BUILD_SHA ?? 'dev').slice(0, 12))}</span></nav></footer>
   </div>`;
 }
 
-function route(): void {
+function route(restoreScroll = false): void {
+  const moveFocus = !firstRoute;
+  firstRoute = false;
   closeSocket();
   const path = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
-  if (path === '/privacy') return renderLegal('Privacy');
-  if (path === '/terms') return renderLegal('Terms');
-  if (path === '/create') return renderEditor();
-  if (path === '/host' && params.get('room')) return restoreHost(params.get('room')!);
-  if (path === '/play' && params.get('room')) { void renderNickname(params.get('room')!); return; }
-  if (path === '/play') return renderJoin();
-  renderHome();
+  if (path === '/privacy') renderLegal('Privacy');
+  else if (path === '/terms') renderLegal('Terms');
+  else if (path === '/create') renderEditor();
+  else if (path === '/demo' || params.get('demo') === '1') renderDemo();
+  else if (path === '/host' && params.get('room')) restoreHost(params.get('room')!);
+  else if (path === '/play' && params.get('room')) void renderNickname(params.get('room')!);
+  else if (path === '/play') renderJoin();
+  else if (path === '/' ) renderHome();
+  else renderNotFound();
+  if (!restoreScroll) window.scrollTo(0, 0);
+  completeRoute(path, restoreScroll, moveFocus);
 }
 
-function navigate(path: string): void { history.pushState({}, '', path); route(); }
+function navigate(path: string): void { history.replaceState({ scrollY: window.scrollY }, ''); history.pushState({ scrollY: 0 }, '', path); route(); }
+
+function completeRoute(path: string, restoreScroll: boolean, moveFocus: boolean): void {
+  const page: [string, string] = path === '/demo' ? ['Demo — Open Quiz Arena', 'Try a sample live quiz with host controls and sample learners.'] : path === '/create' ? ['Create a quiz — Open Quiz Arena', 'Create a live classroom quiz and open a room code.'] : path === '/play' ? ['Join a quiz — Open Quiz Arena', 'Join a live classroom quiz with a room code and nickname.'] : path === '/privacy' ? ['Privacy — Open Quiz Arena', 'How temporary live quiz rooms handle data.'] : path === '/terms' ? ['Terms — Open Quiz Arena', 'Terms for using Open Quiz Arena.'] : path === '/404' ? ['Page not found — Open Quiz Arena', 'This page does not exist.'] : ['Open Quiz Arena — live classroom quizzes', 'Teachers and trainers run live quizzes. Learners join by code and answer on their phones.'];
+  document.title = page[0];
+  document.querySelector('meta[name="description"]')?.setAttribute('content', page[1]);
+  document.querySelector('link[rel="canonical"]')?.setAttribute('href', `${location.origin}${path === '/404' ? '/404' : path}`);
+  requestAnimationFrame(() => requestAnimationFrame(() => { if (moveFocus) { const heading = document.querySelector<HTMLElement>('main h1'); heading?.setAttribute('tabindex', '-1'); heading?.focus({ preventScroll: true }); announce(page[0]); } window.scrollTo(0, restoreScroll ? Number((history.state as { scrollY?: number } | null)?.scrollY ?? 0) : 0); }));
+}
+function announce(message: string): void { let status = document.querySelector<HTMLElement>('#route-status'); if (!status) { status = document.createElement('p'); status.id = 'route-status'; status.className = 'sr-only'; status.setAttribute('aria-live', 'polite'); document.body.append(status); } status.textContent = message; }
 
 function renderHome(): void {
   app.innerHTML = shell(`<section class="hero">
-    <div class="hero-copy"><p class="eyebrow"><span></span> The free lane is open</p><h1>One live quiz.<br><em>Everybody plays.</em></h1>
-      <p class="lede">Run a fast classroom game for 4 or 400—no student accounts, no artificial cap, no quiz library left behind.</p>
-      <div class="hero-actions"><button class="button button--lime" data-nav="/create">Build a quiz <span aria-hidden="true">→</span></button><button class="button button--ghost" data-nav="/play">Join a room</button></div>
-      <ul class="trust-row" aria-label="Product promises"><li>6-digit entry</li><li>Quiz-as-link</li><li>Auto-deleted rooms</li></ul>
+    <div class="hero-copy"><p class="eyebrow"><span></span> Free live classroom quiz</p><h1>Run a live classroom quiz for everyone.</h1>
+      <p class="lede">Teachers and trainers host. Learners join by code and answer on their phones.</p>
+      <div class="hero-actions"><button class="button button--lime" data-nav="/demo">Try it with sample data <span aria-hidden="true">→</span></button><span class="action-note">Opens a sample host screen with learners already joined.</span><button class="button button--ghost" data-nav="/create">Create a quiz</button><button class="button button--ghost" data-nav="/play">Join a room</button></div>
+      <ul class="trust-row" aria-label="Key facts"><li>Free</li><li>No accounts</li><li>Internet required</li></ul>
     </div>
     <div class="arena-preview" aria-label="Illustration of a live quiz scoreboard">
       <div class="preview-head"><span>LIVE · Q 4/8</span><span>27 PLAYING</span></div>
@@ -59,13 +79,43 @@ function renderHome(): void {
       <div class="preview-lanes"><span><b>A</b> Inner core</span><span><b>B</b> Mantle</span><span><b>C</b> Outer core</span><span><b>D</b> Atmosphere</span></div>
       <div class="signal-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
     </div>
-  </section><section class="how"><p class="section-number">01 / HOW IT RUNS</p><h2>From blank page to full-room energy in three moves.</h2><ol><li><b>Build or import</b><span>Type questions or drop in a clean CSV.</span></li><li><b>Put up the code</b><span>Learners enter one nickname on any phone.</span></li><li><b>Control the pace</b><span>You reveal every answer and the final podium.</span></li></ol></section>`);
+  </section><section class="how"><p class="section-number">01 / HOW IT WORKS</p><h2>Run a quiz in three steps.</h2><ol><li><b>Create or import</b><span>Type questions or import a CSV file.</span></li><li><b>Share the code</b><span>Learners enter one nickname on their phones.</span></li><li><b>Reveal results</b><span>Show each answer, rankings, and the final podium.</span></li></ol></section><section class="data-limits"><h2>Data and limits</h2><p>Internet is required for a live room. There is no homework mode or analytics dashboard.</p><p>Rooms are temporary. Active rooms expire after two hours without activity. Finished rooms expire after ten minutes.</p></section>`);
   bindGlobal();
 }
 
+function renderDemo(): void {
+  const stored = localStorage.getItem('demo:open-quiz-arena:step');
+  if (stored !== null) demoStep = Math.max(0, Math.min(2, Number(stored) || 0));
+  const phase = demoStep === 0 ? 'lobby' : demoStep === 1 ? 'question' : 'leaderboard';
+  const people = ['Maya', 'Ibrahim', 'Lena'];
+  const sampleQuestion = demoQuiz.questions[0]!;
+  const answered = demoAnswers.size || (phase === 'leaderboard' ? 3 : 0);
+  const body = phase === 'lobby'
+    ? `<section class="board lobby-board"><div class="board-top"><div><p>SAMPLE ROOM CODE</p><h1 aria-label="Sample room code 046610">046610</h1></div><div class="connection connection--live"><i></i>Sample live</div></div><div class="lobby-main"><div><p class="eyebrow"><span></span> Climate check</p><h2>Sample learners are ready.</h2><p class="big-status"><strong>3</strong> learners joined</p><div class="player-cloud">${people.map(person => `<span>${person}</span>`).join('')}</div></div><aside class="host-tools"><button class="button button--lime" id="demo-start">Start sample question <span aria-hidden="true">→</span></button><p>Use this host screen to see the quiz flow.</p></aside></div></section>`
+    : phase === 'question'
+      ? `<section class="board question-board"><div class="board-strip"><span>SAMPLE · Q 1/1</span><span>${answered}/3 ANSWERED</span><div class="connection connection--live"><i></i>Sample live</div></div><h1>${sampleQuestion.prompt}</h1><div class="host-answer-grid">${sampleQuestion.answers.map(answerLane).join('')}</div><section class="demo-learners" aria-label="Sample learner phones"><h2>Sample learner phones</h2>${people.map(person => `<button class="button button--ghost" data-demo-answer="${person}" ${demoAnswers.has(person) ? 'disabled' : ''}>${demoAnswers.has(person) ? `${person} answered` : `${person} answers A`}</button>`).join('')}</section><div class="board-controls"><span>Choose learner answers, then reveal.</span><button class="button button--lime" id="demo-reveal" ${answered < 3 ? 'disabled' : ''}>Reveal sample result <span aria-hidden="true">→</span></button></div></section>`
+      : `<section class="board results-board"><div class="board-strip"><span>SAMPLE RESULTS · Q 1/1</span><div class="connection connection--live"><i></i>Sample live</div></div><div class="correct-call"><span>CORRECT ANSWER</span><h1>A · Turn off idle devices</h1></div><ol class="leaderboard"><li><span class="rank">01</span><strong>Maya</strong><span>998 pts</span></li><li><span class="rank">02</span><strong>Ibrahim</strong><span>996 pts</span></li><li><span class="rank">03</span><strong>Lena</strong><span>994 pts</span></li></ol><div class="board-controls"><span>The host reveals rankings after each question.</span><button class="button button--lime" id="demo-podium">Show sample podium <span aria-hidden="true">→</span></button></div></section>`;
+  app.innerHTML = shell(body, { demo: true, compact: true });
+  bindGlobal();
+  document.querySelector('#demo-start')?.addEventListener('click', () => { demoStep = 1; demoAnswers.clear(); persistDemo(); renderDemo(); });
+  document.querySelectorAll<HTMLElement>('[data-demo-answer]').forEach(button => button.addEventListener('click', () => { demoAnswers.add(button.dataset.demoAnswer ?? ''); persistDemo(); renderDemo(); }));
+  document.querySelector('#demo-reveal')?.addEventListener('click', () => { demoStep = 2; persistDemo(); renderDemo(); });
+  document.querySelector('#demo-podium')?.addEventListener('click', renderDemoPodium);
+  document.querySelector('#reset-demo')?.addEventListener('click', () => { localStorage.removeItem('demo:open-quiz-arena:step'); demoStep = 0; demoAnswers.clear(); renderDemo(); });
+  document.querySelector('#start-real')?.addEventListener('click', () => { localStorage.removeItem('demo:open-quiz-arena:step'); demoStep = 0; demoAnswers.clear(); navigate('/create'); });
+}
+function persistDemo(): void { localStorage.setItem('demo:open-quiz-arena:step', String(demoStep)); }
+function renderDemoPodium(): void {
+  app.innerHTML = shell(`<section class="board podium"><p class="eyebrow"><span></span> Sample result</p><h1>Sample podium.</h1><div class="podium-steps"><div class="podium-place podium-place--1"><span>2</span><strong>Ibrahim</strong><small>996 pts</small></div><div class="podium-place podium-place--2"><span>1</span><strong>Maya</strong><small>998 pts</small></div><div class="podium-place podium-place--3"><span>3</span><strong>Lena</strong><small>994 pts</small></div></div><div class="final-actions"><button class="button button--lime" id="reset-demo">Run the sample again</button></div></section>`, { demo: true, compact: true });
+  bindGlobal();
+  document.querySelector('#reset-demo')?.addEventListener('click', () => { localStorage.removeItem('demo:open-quiz-arena:step'); demoStep = 0; demoAnswers.clear(); renderDemo(); });
+  document.querySelector('#start-real')?.addEventListener('click', () => navigate('/create'));
+}
+function renderNotFound(): void { app.innerHTML = shell(`<section class="center-panel"><p class="eyebrow"><span></span> 404</p><h1>Page not found.</h1><p>This address does not lead to a quiz, demo, or policy page.</p><div class="hero-actions"><button class="button button--lime" data-nav="/">Go home</button><button class="button button--ghost" data-nav="/demo">Try the sample quiz</button></div></section>`); bindGlobal(); }
+
 function renderJoin(error = ''): void {
-  app.innerHTML = shell(`<section class="center-panel"><p class="eyebrow"><span></span> Player entry</p><h1>Enter the arena.</h1><p>Your host has a six-digit code.</p>
-    ${error ? alertBox(error) : ''}<form id="join-code" class="join-form"><label for="room-code">Room code</label><input class="code-input" id="room-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus aria-describedby="code-hint"><small id="code-hint">Six numbers, shown on the host screen.</small><button class="button button--lime">Continue <span aria-hidden="true">→</span></button></form></section>`);
+  app.innerHTML = shell(`<section class="center-panel"><p class="eyebrow"><span></span> Learner entry</p><h1>Enter your room code.</h1><p>Your host shows a six-digit code.</p>
+    ${error ? alertBox(error) : ''}<form id="join-code" class="join-form"><label for="room-code">Room code</label><input class="code-input" id="room-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus aria-describedby="code-hint"><small id="code-hint">Six numbers, shown on the host screen.</small><button class="button button--lime">Enter nickname <span aria-hidden="true">→</span></button></form></section>`);
   bindGlobal();
   document.querySelector<HTMLFormElement>('#join-code')?.addEventListener('submit', event => { event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const code = new FormData(form).get('code')?.toString().replace(/\D/g, ''); if (code?.length === 6) navigate(`/play?room=${code}`); });
 }
@@ -73,7 +123,7 @@ function renderJoin(error = ''): void {
 async function renderNickname(code: string, error = ''): Promise<void> {
   const stored = sessionStorage.getItem(`arena:player:${code}`);
   if (stored) { const parsed = JSON.parse(stored) as { token: string; nickname: string }; return connectPlayer(code, parsed.token, parsed.nickname); }
-  app.innerHTML = shell(`<section class="center-panel"><p class="room-chip">ROOM ${escapeHtml(code)}</p><h1>Choose your arena name.</h1><p>Use a name your teacher will recognize. We discard it when the room expires.</p>${error ? alertBox(error) : ''}
+  app.innerHTML = shell(`<section class="center-panel"><p class="room-chip">ROOM ${escapeHtml(code)}</p><h1>Enter your nickname.</h1><p>Use a name your teacher will recognize. The room deletes temporary data after its stated timeout.</p>${error ? alertBox(error) : ''}
   <form id="nickname-form" class="join-form"><label for="nickname">Nickname</label><input id="nickname" name="nickname" maxlength="24" autocomplete="nickname" required autofocus><button class="button button--lime">Join room <span aria-hidden="true">→</span></button></form></section>`);
   bindGlobal();
   document.querySelector<HTMLFormElement>('#nickname-form')?.addEventListener('submit', async event => {
@@ -98,11 +148,11 @@ function syncDraft(form?: HTMLFormElement | null): void {
 }
 
 function renderEditor(error = '', focusId = ''): void {
-  app.innerHTML = shell(`<section class="editor"><div class="editor-heading"><div><p class="eyebrow"><span></span> Host desk</p><h1>Build tonight’s board.</h1><p>Questions stay in this browser until you start a live room or copy a share link.</p></div><button class="button button--ghost" id="show-import">Import CSV</button></div>
+  app.innerHTML = shell(`<section class="editor"><div class="editor-heading"><div><p class="eyebrow"><span></span> Host controls</p><h1>Create a live quiz.</h1><p>Your browser keeps the quiz while you edit. Open a room when you are ready.</p></div><button class="button button--ghost" id="show-import">Import CSV</button></div>
     ${error ? alertBox(error) : ''}<section id="csv-panel" class="csv-panel" hidden aria-labelledby="csv-title"><h2 id="csv-title">Import questions from CSV</h2><p>Columns: <code>question,answer1,answer2,answer3,answer4,correct,time</code>. Correct is the answer number.</p><div id="csv-errors" tabindex="-1"></div><label for="csv-file">Choose a .csv file</label><input id="csv-file" type="file" accept=".csv,text/csv"><label for="csv-text">Or paste CSV</label><textarea id="csv-text" rows="6" placeholder="question,answer1,answer2,correct,time"></textarea><div class="button-row"><button class="button button--cyan" id="import-csv">Use these questions</button><button class="button button--quiet" id="close-import">Cancel</button></div></section>
     <form id="quiz-form"><label class="title-field" for="quiz-title">Quiz title<input id="quiz-title" name="title" maxlength="100" required value="${escapeHtml(draft.title)}" placeholder="e.g. Friday science sprint"></label>
       <div class="question-list">${draft.questions.map(questionEditor).join('')}</div><div class="editor-actions"><button type="button" class="button button--ghost" id="add-question">+ Add question</button><button class="button button--lime" data-testid="create-room">Open live room <span aria-hidden="true">→</span></button></div></form>
-    <p class="data-note">Nothing is uploaded until you open a room. Live room data is automatically erased.</p></section>`);
+    <p class="data-note">A room is temporary. Active rooms expire after two hours without activity. Finished rooms expire after ten minutes.</p></section>`);
   bindGlobal(); bindEditor();
   if (focusId) document.getElementById(focusId)?.focus();
 }
@@ -199,8 +249,8 @@ function bindLive(): void {
 }
 
 function renderLegal(which: 'Privacy' | 'Terms'): void {
-  const privacy = `<p><strong>Short version:</strong> Open Quiz Arena is operated by Sociobot. It does not create accounts, use trackers, or keep a quiz library.</p><h2>Data during a game</h2><p>We process quiz content, a moderated nickname, answers, score, and random session tokens only to run the requested live room. Where privacy law requires a basis, this is our legitimate interest in operating that room. Do not use a full legal name as a nickname.</p><h2>Automatic deletion</h2><p>Active rooms expire after two hours without activity. Finished rooms expire after ten minutes. Room data stays in server memory and is not written to an application database or backup.</p><h2>Local data</h2><p>Your browser temporarily stores random reconnect tokens in session storage. Closing the tab or browser session clears them. Quiz share links contain the quiz itself in the URL fragment; the fragment is not sent to our server until you choose to open a room.</p><h2>Your rights and contact</h2><p>For access, correction, deletion, restriction, or objection requests while a room is still active, email <a class="legal-contact" href="mailto:privacy@sociobot.in?subject=Open%20Quiz%20Arena%20privacy%20request">privacy@sociobot.in</a> with the room code. Once its short retention window ends, the room cannot be recovered.</p>`;
-  const terms = `<p>Open Quiz Arena is a free live facilitation tool operated by Sociobot. By using it, you agree to use it lawfully and in a way suitable for your classroom or event.</p><h2>Your content</h2><p>You keep ownership of quiz content you enter. You are responsible for having permission to use it and for avoiding personal, harmful, or unlawful material.</p><h2>Fair use</h2><p>Do not disrupt rooms, automate abusive traffic, impersonate others, or try to bypass safety limits. We may end abusive sessions to protect the service.</p><h2>Availability and data</h2><p>The service is provided as-is without a guarantee of uninterrupted availability. Keep a copy of important quiz content in its share link or source CSV because rooms are deliberately temporary. See <a class="legal-contact" href="/privacy" data-route>Privacy</a> for the two-hour/ten-minute retention schedule and rights requests, or email <a class="legal-contact" href="mailto:privacy@sociobot.in?subject=Open%20Quiz%20Arena%20privacy%20request">privacy@sociobot.in</a>.</p>`;
+  const privacy = `<p><strong>Short version:</strong> Sociobot operates Open Quiz Arena. The service asks learners for a nickname to show during a live room.</p><h2>Data during a game</h2><p>A live room receives the quiz, nickname, and reconnect token needed to show the quiz. Please avoid using a full legal name as a nickname.</p><h2>Temporary rooms</h2><p>Active rooms expire after two hours without activity. Finished rooms expire after ten minutes. The service removes an expired room from the running application.</p><h2>Your browser</h2><p>The browser stores a reconnect token for the current browser session. A reusable quiz link keeps quiz data after the # sign in the address.</p><h2>Questions and contact</h2><p>For a privacy request while a room is active, email <a class="legal-contact" href="mailto:privacy@sociobot.in?subject=Open%20Quiz%20Arena%20privacy%20request">privacy@sociobot.in</a> with the room code.</p>`;
+  const terms = `<p>Open Quiz Arena is a free live quiz tool operated by Sociobot. Use it lawfully and in a way suitable for your classroom or event.</p><h2>Your content</h2><p>You are responsible for the quiz content you enter and for having permission to use it.</p><h2>Fair use</h2><p>Do not disrupt rooms, automate abusive traffic, impersonate others, or bypass safety limits. We may end abusive sessions to protect the service.</p><h2>Temporary room data</h2><p>Keep important quiz content in a reusable link or source CSV. Live room data is temporary. See <a class="legal-contact" href="/privacy" data-route>Privacy</a> for timing and contact details. Contact <a class="legal-contact" href="mailto:privacy@sociobot.in?subject=Open%20Quiz%20Arena%20terms">privacy@sociobot.in</a> with terms questions.</p>`;
   app.innerHTML = shell(`<article class="legal"><p class="eyebrow"><span></span> Plain-language policy</p><h1>${which}</h1><p class="effective">Effective 27 August 2026</p>${which === 'Privacy' ? privacy : terms}</article>`); bindGlobal();
 }
 
@@ -215,5 +265,5 @@ function showToast(message: string): void { let toast = document.querySelector<H
 async function copyText(value: string, success: string): Promise<void> { await navigator.clipboard.writeText(value); const status = document.querySelector<HTMLElement>('#copy-status'); if (status) status.textContent = success; }
 function loadSharedQuiz(): Quiz | null { const match = location.hash.match(/(?:^#|&)quiz=([^&]+)/); return match?.[1] ? decodeQuiz(match[1]) : null; }
 
-window.addEventListener('popstate', route);
+window.addEventListener('popstate', () => route(true));
 route();

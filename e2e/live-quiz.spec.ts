@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('host and multiple isolated players complete an eight-question quiz', async ({ browser }) => {
+test('@claim:live-quiz-results host and multiple isolated players complete an eight-question quiz', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const host = await hostContext.newPage();
   const errors: string[] = [];

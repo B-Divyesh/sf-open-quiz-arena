@@ -1,5 +1,7 @@
 FROM node:22-alpine AS web
 WORKDIR /app
+ARG BUILD_SHA=dev
+ENV VITE_BUILD_SHA=${BUILD_SHA}
 COPY package.json package-lock.json tsconfig.json vite.config.ts ./
 COPY src-web ./src-web
 COPY tests-web ./tests-web
@@ -11,7 +13,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src ./src
 COPY src-web/public ./src-web/public
-ARG BUILD_SHA=unknown
+ARG BUILD_SHA=dev
 ENV BUILD_SHA=${BUILD_SHA}
 RUN cargo build --release --locked
 

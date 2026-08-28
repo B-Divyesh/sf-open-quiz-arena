@@ -43,4 +43,4 @@ Motion is sparse and physical: buttons lift 2px on hover, the waiting signal gen
 
 ## Original assets and provenance
 
-All marks, signal bars, lane layouts, podium geometry, and interface icons are hand-authored in HTML/CSS for Open Quiz Arena during this work order. No generated images, stock assets, copied trade dress, external icon sets, music, or third-party fonts are used. The three-bar logo is an original abstract live-signal mark and is not derived from an incumbent product.
+All marks, signal bars, lane layouts, podium geometry, and interface icons are hand-authored in HTML/CSS for Open Quiz Arena during this work order. `src-web/public/open-graph.png` and `apple-touch-icon.png` are original score-board compositions made locally from the same tokens and text with ImageMagick; they contain no stock or generated imagery. No copied trade dress, external icon sets, music, or third-party fonts are used. The three-bar logo is an original abstract live-signal mark and is not derived from an incumbent product.

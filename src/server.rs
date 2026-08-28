@@ -124,9 +124,15 @@ pub fn app(state: Arc<AppState>) -> Router {
     let assets = ServeDir::new(dist.join("assets"));
     let favicon = ServeFile::new(dist.join("favicon.svg"));
     let spa = ServeFile::new(dist.join("index.html"));
+    let apple_icon = ServeFile::new(dist.join("apple-touch-icon.png"));
+    let open_graph = ServeFile::new(dist.join("open-graph.png"));
+    let sitemap = ServeFile::new(dist.join("sitemap.xml"));
     Router::new()
         .route("/health", get(health))
         .route("/robots.txt", get(robots))
+        .route_service("/sitemap.xml", sitemap)
+        .route_service("/apple-touch-icon.png", apple_icon)
+        .route_service("/open-graph.png", open_graph)
         .route("/api/rooms", post(create_room))
         .route("/api/rooms/{code}", get(room_status))
         .route("/api/rooms/{code}/join", post(join_room))
@@ -135,13 +141,30 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/ws/{code}", get(websocket))
         .nest_service("/assets", assets)
         .route_service("/favicon.svg", favicon)
-        .fallback_service(spa)
+        .route_service("/", spa.clone())
+        .route_service("/demo", spa.clone())
+        .route_service("/create", spa.clone())
+        .route_service("/play", spa.clone())
+        .route_service("/host", spa.clone())
+        .route_service("/privacy", spa.clone())
+        .route_service("/terms", spa.clone())
+        .route_service("/404", spa)
+        .fallback(not_found_page)
         .layer(RequestBodyLimitLayer::new(256 * 1024))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn(security_headers))
         .layer(middleware::from_fn_with_state(state.clone(), rate_limit))
         .with_state(state)
+}
+
+async fn not_found_page() -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        include_str!("../src-web/public/404.html"),
+    )
+        .into_response()
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -483,6 +506,7 @@ async fn rate_limit(
     if state.rate_count.fetch_add(1, Ordering::Relaxed) > 2000 {
         return (
             StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, "1")],
             Json(json!({ "error": "Too many requests. Wait a moment and try again." })),
         )
             .into_response();
@@ -517,7 +541,7 @@ async fn rate_limit(
         entry.1 > 180
     };
     if limited {
-        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "Too many requests from this connection. Wait a moment and try again." }))).into_response();
+        return (StatusCode::TOO_MANY_REQUESTS, [(header::RETRY_AFTER, "1")], Json(json!({ "error": "Too many requests from this connection. Wait a moment and try again." }))).into_response();
     }
     next.run(request).await
 }
@@ -588,13 +612,22 @@ mod tests {
         assert_eq!(app.oneshot(start).await.unwrap().status(), StatusCode::OK);
     }
     #[tokio::test]
-    async fn purge_removes_all_room_data() {
+    #[doc = "@claim:temporary-room-expiry"]
+    async fn claim_temporary_room_expiry() {
         let state = AppState::new();
         let (code, _) = state
             .create_room(serde_json::from_value(quiz_json()).unwrap())
             .await;
         state.rooms.read().await[&code].lock().await.finished_at =
             Some(Instant::now() - crate::model::FINISHED_TTL);
+        assert_eq!(state.purge_expired().await, 1);
+        assert!(state.rooms.read().await.is_empty());
+
+        let (code, _) = state
+            .create_room(serde_json::from_value(quiz_json()).unwrap())
+            .await;
+        state.rooms.read().await[&code].lock().await.touched_at =
+            Instant::now() - crate::model::ACTIVE_TTL;
         assert_eq!(state.purge_expired().await, 1);
         assert!(state.rooms.read().await.is_empty());
     }
