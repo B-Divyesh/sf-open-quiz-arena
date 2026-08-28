@@ -17,6 +17,8 @@ npm ci
 npm test
 npm run build
 cargo test --locked
+BASE_URL=http://127.0.0.1:8081 npx playwright test --project=desktop --retries=0
+BASE_URL=http://127.0.0.1:8081 npx playwright test e2e/mobile.spec.ts --project=mobile --retries=0
 ```
 
 Main working-tree gates passed:
@@ -33,7 +35,7 @@ cargo test claim_temporary_room_expiry --locked
 .factory/verify-url.sh http://127.0.0.1:8080/demo
 ```
 
-Results: unit 3/3, Rust 12/12, desktop browser 16/16, mobile browser 2/2, claim expiry 1/1, and verifier title/lang/main/alt/console checks passed. The browser suite includes Axe checks with zero serious/critical violations on join and privacy routes. Initial JavaScript is 30.90 KB raw / 10.11 KB gzip; CSS is 19.99 KB raw / 5.17 KB gzip.
+Results: unit 3/3, Rust 12/12, clean-clone desktop browser 16/16 (including every claim), clean-clone mobile browser 2/2, claim expiry 1/1, and verifier title/lang/main/alt/console checks passed. The browser suite includes Axe checks with zero serious/critical violations on join and privacy routes. Initial JavaScript is 30.90 KB raw / 10.11 KB gzip; CSS is 19.99 KB raw / 5.17 KB gzip.
 
 Evidence images:
 
