@@ -25,7 +25,7 @@ test('@claim:live-quiz-results host and multiple isolated players complete an ei
     await expect(page.getByRole('heading', { name: new RegExp(`You’re in, ${nickname}`) })).toBeVisible();
     return { context, page };
   }));
-  await expect(host.getByText('3 players ready')).toBeVisible();
+  await expect(host.getByText('3 learners ready')).toBeVisible();
   await host.getByRole('button', { name: 'Start quiz' }).click();
 
   for (let index = 1; index <= 8; index += 1) {

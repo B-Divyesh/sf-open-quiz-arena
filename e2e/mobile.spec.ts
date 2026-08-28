@@ -51,6 +51,16 @@ test('the 390px first screen keeps the job, audience, sample action, and facts i
   await context.close();
 });
 
+test('the 1440px first screen keeps the plain facts above the fold', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await page.goto('/');
+  const facts = await page.locator('.trust-row').boundingBox();
+  expect(facts).not.toBeNull();
+  expect(facts!.y + facts!.height).toBeLessThanOrEqual(900);
+  await context.close();
+});
+
 test('every public route has one main heading and no serious accessibility issue', async ({ page }) => {
   for (const path of ['/', '/demo', '/?demo=1', '/create', '/play', '/privacy', '/terms', '/definitely-missing']) {
     await page.goto(path);

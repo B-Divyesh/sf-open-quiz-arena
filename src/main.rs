@@ -14,10 +14,8 @@ async fn main() {
         )
         .init();
 
-    let port: u16 = env::var("PORT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(8080);
+    let supplied_port = env::var("PORT").ok().and_then(|value| value.parse().ok());
+    let port = supplied_port.unwrap_or(8080);
     let state = Arc::new(AppState::new());
     let purge_state = state.clone();
     tokio::spawn(async move {
@@ -32,7 +30,7 @@ async fn main() {
         .await
         .expect("bind server");
     let build_sha = state.build_sha();
-    info!(%address, %build_sha, "server_started");
+    info!(%address, %build_sha, port_config = if supplied_port.is_some() { "supplied" } else { "defaulted" }, "server_started");
     axum::serve(listener, app(state))
         .with_graceful_shutdown(shutdown_signal())
         .await

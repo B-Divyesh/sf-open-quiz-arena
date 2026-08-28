@@ -1,1 +1,1 @@
-Run live classroom quizzes tested with 40 learners, with no accounts.
+Run live classroom quizzes with no accounts, tested with 40 learners.

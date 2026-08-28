@@ -4,11 +4,11 @@ Run one live quiz for your class.
 
 Teachers and trainers create questions, share a six-digit room code, and reveal each result. The live room is tested with 40 learners.
 
-Try the isolated sample at `/demo` or `/?demo=1`. The sample uses preset learners and separate demo storage. Reset demo removes that sample progress. Start for real removes it and opens the quiz editor.
+Try the isolated sample at `/demo` or `/?demo=1`. The sample uses preset learners and separate demo storage. Reset demo removes that sample progress. Leave demo and create a quiz removes it and opens the quiz editor.
 
 ## Run locally
 
-Requirements: Rust stable and Node 22+.
+Build and test with Node 22 and current stable Rust.
 
 ```sh
 npm ci
@@ -18,7 +18,7 @@ cargo run
 
 Open `http://localhost:8080`.
 
-`PORT` defaults to `8080`. `STATIC_DIR` defaults to `dist`. `/health` returns the build identifier.
+Without settings, the server uses port `8080`, serves `dist`, and returns a build identifier at `/health`.
 
 ## Test
 
@@ -34,15 +34,15 @@ Every public product claim and its command are listed in [`.factory/claims.json`
 
 ## CSV format
 
-Use a header row with `question,answer1,answer2,correct`. Optional columns are `answer3`, `answer4`, and `time`.
+Use a header row with `question,answer1,answer2,correct`. CSV accepts `answer3`, `answer4`, and `time` columns.
 
-`correct` uses answer numbers starting at 1. `time` accepts 5 to 120 seconds.
+CSV `correct` uses answer numbers from `1` to `4`. CSV `time` accepts 5 to 120 seconds.
 
 ## Deployment
 
-Build the supplied Dockerfile with `BUILD_SHA` set to the source commit. The container listens on `PORT` and serves `/health`.
+Build the supplied Dockerfile with `BUILD_SHA` set to the source commit. The service accepts `PORT` and serves `/health`.
 
-Live rooms run in one process. Deploy one warm replica until a shared room coordinator exists.
+Live rooms use the running server process. Deploy one warm replica until a shared room coordinator exists.
 
 ## Privacy and terms
 

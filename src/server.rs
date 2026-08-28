@@ -661,6 +661,17 @@ mod tests {
         assert_eq!(room.lock().await.players.len(), 40);
     }
     #[tokio::test]
+    #[doc = "@claim:single-process-room-state"]
+    async fn claim_single_process_room_state() {
+        let first_process = AppState::new();
+        let second_process = AppState::new();
+        let (code, _) = first_process
+            .create_room(serde_json::from_value(quiz_json()).unwrap())
+            .await;
+        assert!(first_process.room(&code).await.is_some());
+        assert!(second_process.room(&code).await.is_none());
+    }
+    #[tokio::test]
     async fn health_exposes_configured_build_sha_and_security_headers() {
         let app = app(Arc::new(AppState::with_build_sha("21029cf3e036")));
         let response = app

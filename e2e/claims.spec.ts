@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('@claim:demo-sandbox opens both demo URLs, resets them, and leaves no sample progress', async ({ page }) => {
+test('@claim:demo-sandbox opens both demo URLs, resets them, replays the podium, and leaves no sample progress', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', request => requests.push(request.url()));
   await page.goto('/demo');
@@ -10,6 +10,14 @@ test('@claim:demo-sandbox opens both demo URLs, resets them, and leaves no sampl
   for (const name of ['Maya answers A', 'Ibrahim answers A', 'Lena answers A']) await page.getByRole('button', { name }).click();
   await page.getByRole('button', { name: 'Reveal sample result' }).click();
   await expect(page.getByText('998 pts')).toBeVisible();
+  await page.getByRole('button', { name: 'Show sample podium' }).click();
+  await expect(page.getByRole('heading', { name: 'Sample podium.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Run the sample again' }).click();
+  await expect(page.getByRole('button', { name: 'Start sample question' })).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+  await page.getByRole('button', { name: 'Start sample question' }).click();
+  for (const name of ['Maya answers A', 'Ibrahim answers A', 'Lena answers A']) await page.getByRole('button', { name }).click();
+  await page.getByRole('button', { name: 'Reveal sample result' }).click();
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys).toEqual(['demo:open-quiz-arena:step']);
   expect(requests.every(url => new URL(url).origin === new URL(page.url()).origin)).toBe(true);
@@ -28,7 +36,7 @@ test('@claim:demo-sandbox opens both demo URLs, resets them, and leaves no sampl
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
 
   await page.getByRole('button', { name: 'Start sample question' }).click();
-  await page.getByRole('button', { name: 'Start for real' }).click();
+  await page.getByRole('button', { name: 'Leave demo and create a quiz' }).click();
   await expect(page).toHaveURL(/\/create$/);
   await expect(page).toHaveTitle('Create a quiz — Open Quiz Arena');
   expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('demo:')))).toEqual([]);
@@ -113,17 +121,65 @@ test('@claim:six-digit-room-code creates and joins a six-digit room', async ({ r
   expect((await request.post(`/api/rooms/${room.code}/join`, { data: { nickname: 'Maya' } })).status()).toBe(201);
 });
 
-test('@claim:csv-import reads a CSV and lists every invalid row issue', async ({ page }) => {
+test('@claim:csv-import @claim:csv-optional-columns @claim:csv-answer-numbering @claim:csv-time-range reads CSV options, boundaries, and every invalid row issue', async ({ page }) => {
   await page.goto('/create');
   await page.getByRole('button', { name: 'Import CSV' }).click();
-  await page.locator('#csv-text').fill('question,answer1,answer2,correct,time\nCapital,Paris,Lyon,1,20');
+  await page.locator('#csv-text').fill('question,answer1,answer2,answer3,answer4,correct,time\nCapital,Paris,Lyon,Marseille,Nice,1,5\nCompass,North,South,East,West,4,120');
   await page.getByRole('button', { name: 'Use these questions' }).click();
   await expect(page.getByLabel('Prompt').first()).toHaveValue('Capital');
+  await expect(page.locator('#q0-a2')).toHaveValue('Marseille');
+  await expect(page.locator('#q0-a3')).toHaveValue('Nice');
+  await expect(page.locator('#q0-correct')).toHaveValue('0');
+  await expect(page.locator('#q0-time')).toHaveValue('5');
+  await expect(page.locator('#q1-correct')).toHaveValue('3');
+  await expect(page.locator('#q1-time')).toHaveValue('120');
   await page.getByRole('button', { name: 'Import CSV' }).click();
-  await page.locator('#csv-text').fill('question,answer1,answer2,correct,time\n,A,,4,2');
+  await page.locator('#csv-text').fill('question,answer1,answer2,correct,time\n,A,,0,4\nB,Yes,No,3,121');
   await page.getByRole('button', { name: 'Use these questions' }).click();
-  await expect(page.locator('#csv-errors')).toContainText('Fix 4 CSV issues');
+  await expect(page.locator('#csv-errors')).toContainText('Fix 6 CSV issues');
+  await expect(page.locator('#csv-errors')).toContainText('correct must be an answer number from 1 to 2');
+  await expect(page.locator('#csv-errors')).toContainText('time must be 5–120 seconds');
   await expect(page.locator('#csv-errors')).toBeFocused();
+});
+
+test('@claim:typed-questions types a quiz, opens its room, and shows it to the host', async ({ page }) => {
+  await page.goto('/create');
+  await page.getByLabel('Quiz title').fill('Typed science check');
+  await page.getByLabel('Prompt').first().fill('What does water become when it freezes?');
+  await page.locator('#q0-a0').fill('Ice');
+  await page.locator('#q0-a1').fill('Steam');
+  await page.getByRole('button', { name: 'Remove question 2' }).click();
+  await page.getByRole('button', { name: 'Open live room' }).click();
+  await expect(page).toHaveURL(/\/host\?room=\d{6}/);
+  await expect(page.getByText('Typed science check')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start quiz' })).toBeDisabled();
+});
+
+test('@claim:draft-in-browser keeps an edited draft in this tab without a request before opening a room', async ({ browser }) => {
+  const origin = process.env.BASE_URL ?? 'http://127.0.0.1:8080';
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const requests: { url: string; method: string; body: string | null }[] = [];
+  page.on('request', request => requests.push({ url: request.url(), method: request.method(), body: request.postData() }));
+  await page.goto(`${origin}/create`);
+  await page.getByLabel('Quiz title').fill('Tab-only draft');
+  await page.getByLabel('Prompt').first().fill('Which tab stores this draft?');
+  await page.locator('#q0-a0').fill('This browser tab');
+  await page.locator('#q0-a1').fill('The server');
+  const draft = await page.evaluate(key => sessionStorage.getItem(key), 'arena:draft');
+  expect(draft).toContain('Tab-only draft');
+  expect(draft).toContain('Which tab stores this draft?');
+  expect(requests.filter(request => new URL(request.url).pathname.startsWith('/api/') || new URL(request.url).pathname.startsWith('/ws/'))).toEqual([]);
+  await page.getByRole('button', { name: 'Remove question 2' }).click();
+  await page.getByRole('button', { name: 'Open live room' }).click();
+  await expect(page).toHaveURL(/\/host\?room=\d{6}/);
+  expect(await page.evaluate(key => sessionStorage.getItem(key), 'arena:draft')).toBeNull();
+  await context.close();
+  const fresh = await browser.newContext();
+  const freshPage = await fresh.newPage();
+  await freshPage.goto(`${origin}/create`);
+  expect(await freshPage.evaluate(key => sessionStorage.getItem(key), 'arena:draft')).toBeNull();
+  await fresh.close();
 });
 
 test('@claim:quiz-share-link keeps the quiz in the URL fragment', async ({ page }) => {
@@ -132,12 +188,20 @@ test('@claim:quiz-share-link keeps the quiz in the URL fragment', async ({ page 
   expect(new URL(page.url()).hash).toContain('quiz=');
 });
 
-test('@claim:mobile-nickname-entry lets a learner enter with a code and nickname', async ({ browser }) => {
+test('@claim:mobile-nickname-entry lets a learner enter, answer, and see the result on a phone', async ({ browser }) => {
   const origin = process.env.BASE_URL ?? 'http://127.0.0.1:8080';
   const quiz = { title: 'Mobile check', questions: [{ prompt: 'Ready?', answers: ['Yes', 'No'], correct_index: 0, time_limit_seconds: 20 }] };
   const api = await browser.newContext();
   const created = await api.request.post(`${origin}/api/rooms`, { data: { quiz } });
-  const room = await created.json() as { code: string };
+  const room = await created.json() as { code: string; host_token: string };
+  const hostContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  await host.goto(`${origin}/`);
+  await host.evaluate(({ code, token, createdQuiz }) => {
+    sessionStorage.setItem(`arena:host:${code}`, token);
+    sessionStorage.setItem(`arena:quiz:${code}`, JSON.stringify(createdQuiz));
+  }, { code: room.code, token: room.host_token, createdQuiz: quiz });
+  await host.goto(`${origin}/host?room=${room.code}`);
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
   const page = await context.newPage();
   await page.goto(`${origin}/play`);
@@ -146,7 +210,14 @@ test('@claim:mobile-nickname-entry lets a learner enter with a code and nickname
   await page.getByLabel('Nickname').fill('Maya');
   await page.getByRole('button', { name: 'Join room' }).click();
   await expect(page.getByRole('heading', { name: /You’re in, Maya/ })).toBeVisible();
-  await context.close(); await api.close();
+  await expect(host.getByText('1 learner ready')).toBeVisible();
+  await host.getByRole('button', { name: 'Start quiz' }).click();
+  await expect(page.getByRole('heading', { name: 'Ready?' })).toBeVisible();
+  await page.locator('[data-choice="0"]').click();
+  await expect(page.getByRole('heading', { name: 'Answer locked.' })).toBeVisible();
+  await host.getByRole('button', { name: 'Reveal answer' }).click();
+  await expect(page.getByText('NICE HIT')).toBeVisible();
+  await context.close(); await hostContext.close(); await api.close();
 });
 
 test('@claim:privacy-session-data stores a reconnect token for the current session', async ({ browser }) => {
@@ -181,6 +252,7 @@ test('@claim:legal-operator-contact names the operator and gives a working priva
 
 test('@claim:route-metadata-and-404 gives each route a title and missing paths a 404', async ({ page, request }) => {
   await page.goto('/');
+  await expect(page).toHaveTitle('Open Quiz Arena — run live classroom quizzes');
   await page.evaluate(() => window.scrollTo(0, 700));
   await page.locator('footer a[href="/privacy"]').click();
   await expect(page).toHaveURL(/\/privacy$/);

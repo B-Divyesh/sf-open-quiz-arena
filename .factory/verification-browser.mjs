@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
 
-const base = 'https://open-quiz-arena.sociobot.in';
+const base = process.env.BASE_URL || 'http://127.0.0.1:8080';
 const evidence = { routes: [], keyboard: {}, mobile: {}, projector: {}, zoom: {}, reduced_motion: {}, live: {}, network: {} };
 const errors = [];
 const failedRequests = [];
@@ -108,7 +108,7 @@ const joinAttempts = await retryUntil(async () => {
     await player.keyboard.press('Enter');
   }
 }, () => player.getByRole('heading', { name: /You’re in/ }).waitFor({ timeout: 5000 }));
-await page.getByText('1 player ready').waitFor();
+await page.getByText('1 learner ready').waitFor();
 const startAttempts = await retryUntil(
   () => page.getByRole('button', { name: /Start quiz/ }).press('Enter'),
   () => player.getByRole('heading', { name: 'Projector question?' }).waitFor({ timeout: 3000 }),
@@ -140,6 +140,10 @@ const answerAttempts = await retryUntil(async () => {
   }
 }, () => player.getByRole('heading', { name: 'Answer locked.' }).waitFor({ timeout: 3000 }));
 evidence.live.keyboard_answer_attempts = answerAttempts;
+
+const reducedLearner = await api(`/api/rooms/${room.code}/join`, {
+  method: 'POST', body: JSON.stringify({ nickname: 'Reduced learner' })
+});
 
 const projector = await page.evaluate(() => {
   const board = document.querySelector('.board')?.getBoundingClientRect();
@@ -178,7 +182,7 @@ const reduced = await browser.newContext({ viewport: { width: 360, height: 780 }
 const reducedPage = await reduced.newPage();
 observe(reducedPage);
 await reducedPage.goto(`${base}/`);
-await reducedPage.evaluate(({ code, token }) => sessionStorage.setItem(`arena:player:${code}`, JSON.stringify({ token, nickname: 'Keyboard Player' })), { code: room.code, token: JSON.parse(await player.evaluate(code => sessionStorage.getItem(`arena:player:${code}`), room.code)).token });
+await reducedPage.evaluate(({ code, token }) => sessionStorage.setItem(`arena:player:${code}`, JSON.stringify({ token, nickname: 'Reduced learner' })), { code: room.code, token: reducedLearner.player_token });
 await reducedPage.goto(`${base}/play?room=${room.code}`);
 await reducedPage.locator('.answer-button').first().waitFor({ timeout: 60000 });
 const reducedStyles = await reducedPage.evaluate(() => {

@@ -10,7 +10,8 @@ interface RoomState { type: 'state'; code: string; quiz_title: string; phase: Ph
 const app = document.querySelector<HTMLDivElement>('#app') as HTMLDivElement;
 if (!app) throw new Error('App root is missing');
 
-let draft: Quiz = loadSharedQuiz() ?? {
+const draftStorageKey = 'arena:draft';
+let draft: Quiz = loadSharedQuiz() ?? loadDraft() ?? {
   title: '', questions: [blankQuestion(), blankQuestion()]
 };
 let socket: WebSocket | undefined;
@@ -30,7 +31,7 @@ function escapeHtml(value: unknown): string { return String(value ?? '').replace
 function shell(content: string, options: { compact?: boolean; demo?: boolean } = {}): string {
   return `<div class="site-shell ${options.compact ? 'site-shell--compact' : ''}">
     <header class="topbar"><a class="brand" href="/" data-route aria-label="Open Quiz Arena home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>OPEN QUIZ ARENA</span></a><nav class="site-nav" aria-label="Main navigation"><a href="/demo" data-route>Demo</a><a href="/create" data-route>Create</a><a href="/play" data-route>Join</a><a href="/privacy" data-route>Privacy</a></nav></header>
-    ${options.demo ? `<aside class="demo-banner" aria-label="Demo controls"><strong>Demo — sample data, nothing is saved</strong><span><button class="demo-link" id="reset-demo">Reset demo</button><button class="demo-link" id="start-real">Start for real</button></span></aside>` : ''}
+    ${options.demo ? `<aside class="demo-banner" aria-label="Demo controls"><strong>Demo — sample data, nothing is saved</strong><span><button class="demo-link" data-demo-reset>Reset demo</button><button class="demo-link" id="start-real">Leave demo and create a quiz</button></span></aside>` : ''}
     <main id="main" tabindex="-1">${content}</main>
     <footer><span>Free live classroom quizzes. No accounts.</span><nav aria-label="Legal"><a href="/privacy" data-route>Privacy</a><a href="/terms" data-route>Terms</a><span>Built by Param Factory · ${escapeHtml((import.meta.env.VITE_BUILD_SHA ?? 'dev').slice(0, 12))}</span></nav></footer>
   </div>`;
@@ -60,7 +61,7 @@ function route(restoreScroll = false): void {
 function navigate(path: string): void { history.replaceState({ scrollY: window.scrollY }, ''); history.pushState({ scrollY: 0 }, '', path); route(); }
 
 function completeRoute(path: string, restoreScroll: boolean, moveFocus: boolean): void {
-  const page: [string, string] = path === '/demo' ? ['Demo — Open Quiz Arena', 'Try a sample live quiz with host controls and sample learners.'] : path === '/create' ? ['Create a quiz — Open Quiz Arena', 'Create a live classroom quiz and open a room code.'] : path === '/play' ? ['Join a quiz — Open Quiz Arena', 'Join a live classroom quiz with a room code and nickname.'] : path === '/host' ? ['Host a quiz — Open Quiz Arena', 'Control questions, answers, rankings, and the final podium.'] : path === '/privacy' ? ['Privacy — Open Quiz Arena', 'How temporary live quiz rooms handle data.'] : path === '/terms' ? ['Terms — Open Quiz Arena', 'Terms for using Open Quiz Arena.'] : path === '/404' ? ['Page not found — Open Quiz Arena', 'This page does not exist.'] : ['Open Quiz Arena — quizzes tested with 40 learners', 'Teachers and trainers run live quizzes tested with 40 learners. Each learner joins by code on a phone.'];
+  const page: [string, string] = path === '/demo' ? ['Demo — Open Quiz Arena', 'Try a sample live quiz with host controls and sample learners.'] : path === '/create' ? ['Create a quiz — Open Quiz Arena', 'Create a live classroom quiz and open a room code.'] : path === '/play' ? ['Join a quiz — Open Quiz Arena', 'Join a live classroom quiz with a room code and nickname.'] : path === '/host' ? ['Host a quiz — Open Quiz Arena', 'Control questions, answers, rankings, and the final podium.'] : path === '/privacy' ? ['Privacy — Open Quiz Arena', 'How temporary live quiz rooms handle data.'] : path === '/terms' ? ['Terms — Open Quiz Arena', 'Terms for using Open Quiz Arena.'] : path === '/404' ? ['Page not found — Open Quiz Arena', 'This page does not exist.'] : ['Open Quiz Arena — run live classroom quizzes', 'Teachers and trainers run live quizzes. Each room is tested with 40 learners.'];
   document.title = page[0];
   document.querySelector('meta[name="description"]')?.setAttribute('content', page[1]);
   document.querySelector('link[rel="canonical"]')?.setAttribute('href', `${location.origin}${path === '/404' ? '/404' : path}`);
@@ -76,8 +77,9 @@ function renderHome(): void {
   app.innerHTML = shell(`<section class="hero">
     <div class="hero-copy"><p class="eyebrow"><span></span> Free live classroom quiz</p><h1>Run one live quiz for your class.</h1>
       <p class="lede">Teachers and trainers host. Learners join by code and answer on their phones.</p>
-      <div class="hero-actions"><button class="button button--lime" data-nav="/demo">Try it with sample data <span aria-hidden="true">→</span></button><span class="action-note">Opens a sample host screen with learners already joined.</span><button class="button button--ghost" data-nav="/create">Create a quiz</button><button class="button button--ghost" data-nav="/play">Join a room</button></div>
+      <div class="hero-actions"><button class="button button--lime" data-nav="/demo">Try it with sample data <span aria-hidden="true">→</span></button><span class="action-note">Opens a sample host screen with learners already joined.</span></div>
       <ul class="trust-row" aria-label="Key facts"><li>Free</li><li>No accounts</li><li>Internet required</li><li>Tested with 40 learners in one room</li></ul>
+      <div class="hero-secondary-actions"><button class="button button--ghost" data-nav="/create">Create a quiz</button><button class="button button--ghost" data-nav="/play">Join a room</button></div>
     </div>
     <div class="arena-preview" aria-label="Illustration of a live quiz scoreboard">
       <div class="preview-head"><span>LIVE · Q 4/8</span><span>27 PLAYING</span></div>
@@ -107,7 +109,7 @@ function renderDemo(): void {
   document.querySelectorAll<HTMLElement>('[data-demo-answer]').forEach(button => button.addEventListener('click', () => { demoAnswers.add(button.dataset.demoAnswer ?? ''); persistDemo(); renderDemo(); }));
   document.querySelector('#demo-reveal')?.addEventListener('click', () => { demoStep = 2; persistDemo(); renderDemo(); });
   document.querySelector('#demo-podium')?.addEventListener('click', renderDemoPodium);
-  document.querySelector('#reset-demo')?.addEventListener('click', resetDemo);
+  document.querySelectorAll<HTMLElement>('[data-demo-reset]').forEach(button => button.addEventListener('click', resetDemo));
   document.querySelector('#start-real')?.addEventListener('click', startForReal);
 }
 function persistDemo(): void { localStorage.setItem('demo:open-quiz-arena:step', String(demoStep)); }
@@ -117,9 +119,9 @@ function clearDemoStorage(): void {
 function resetDemo(): void { clearDemoStorage(); demoStep = 0; demoAnswers.clear(); renderDemo(); }
 function startForReal(): void { clearDemoStorage(); demoStep = 0; demoAnswers.clear(); navigate('/create'); }
 function renderDemoPodium(): void {
-  app.innerHTML = shell(`<section class="board podium"><p class="eyebrow"><span></span> Sample result</p><h1>Sample podium.</h1><div class="podium-steps"><div class="podium-place podium-place--1"><span>2</span><strong>Ibrahim</strong><small>996 pts</small></div><div class="podium-place podium-place--2"><span>1</span><strong>Maya</strong><small>998 pts</small></div><div class="podium-place podium-place--3"><span>3</span><strong>Lena</strong><small>994 pts</small></div></div><div class="final-actions"><button class="button button--lime" id="reset-demo">Run the sample again</button></div></section>`, { demo: true, compact: true });
+  app.innerHTML = shell(`<section class="board podium"><p class="eyebrow"><span></span> Sample result</p><h1>Sample podium.</h1><div class="podium-steps"><div class="podium-place podium-place--1"><span>2</span><strong>Ibrahim</strong><small>996 pts</small></div><div class="podium-place podium-place--2"><span>1</span><strong>Maya</strong><small>998 pts</small></div><div class="podium-place podium-place--3"><span>3</span><strong>Lena</strong><small>994 pts</small></div></div><div class="final-actions"><button class="button button--lime" data-demo-reset>Run the sample again</button></div></section>`, { demo: true, compact: true });
   bindGlobal();
-  document.querySelector('#reset-demo')?.addEventListener('click', resetDemo);
+  document.querySelectorAll<HTMLElement>('[data-demo-reset]').forEach(button => button.addEventListener('click', resetDemo));
   document.querySelector('#start-real')?.addEventListener('click', startForReal);
 }
 function renderNotFound(): void { app.innerHTML = shell(`<section class="center-panel"><p class="eyebrow"><span></span> 404</p><h1>Page not found.</h1><p>This address does not lead to a quiz, demo, or policy page.</p><div class="hero-actions"><button class="button button--lime" data-nav="/">Go home</button><button class="button button--ghost" data-nav="/demo">Try the sample quiz</button></div></section>`); bindGlobal(); }
@@ -158,8 +160,19 @@ function syncDraft(form?: HTMLFormElement | null): void {
   }));
 }
 
+function loadDraft(): Quiz | null {
+  try {
+    const saved = sessionStorage.getItem(draftStorageKey);
+    if (!saved) return null;
+    const value = JSON.parse(saved) as Quiz;
+    return value.title !== undefined && Array.isArray(value.questions) ? value : null;
+  } catch { return null; }
+}
+function persistDraft(): void { sessionStorage.setItem(draftStorageKey, JSON.stringify(draft)); }
+function clearDraft(): void { sessionStorage.removeItem(draftStorageKey); }
+
 function renderEditor(error = '', focusId = ''): void {
-  app.innerHTML = shell(`<section class="editor"><div class="editor-heading"><div><p class="eyebrow"><span></span> Host controls</p><h1>Create a live quiz.</h1><p>Your browser keeps the quiz while you edit. Open a room when you are ready.</p></div><button class="button button--ghost" id="show-import">Import CSV</button></div>
+  app.innerHTML = shell(`<section class="editor"><div class="editor-heading"><div><p class="eyebrow"><span></span> Host controls</p><h1>Create a live quiz.</h1><p>Your draft stays in this browser tab until you open a room or close it.</p></div><button class="button button--ghost" id="show-import">Import CSV</button></div>
     ${error ? alertBox(error) : ''}<section id="csv-panel" class="csv-panel" hidden aria-labelledby="csv-title"><h2 id="csv-title">Import questions from CSV</h2><p>Columns: <code>question,answer1,answer2,answer3,answer4,correct,time</code>. Correct is the answer number.</p><div id="csv-errors" tabindex="-1"></div><label for="csv-file">Choose a .csv file</label><input id="csv-file" type="file" accept=".csv,text/csv"><label for="csv-text">Or paste CSV</label><textarea id="csv-text" rows="6" placeholder="question,answer1,answer2,correct,time"></textarea><div class="button-row"><button class="button button--cyan" id="import-csv">Use these questions</button><button class="button button--quiet" id="close-import">Cancel</button></div></section>
     <form id="quiz-form"><label class="title-field" for="quiz-title">Quiz title<input id="quiz-title" name="title" maxlength="100" required value="${escapeHtml(draft.title)}" placeholder="e.g. Friday science sprint"></label>
       <div class="question-list">${draft.questions.map(questionEditor).join('')}</div><div class="editor-actions"><button type="button" class="button button--ghost" id="add-question">+ Add question</button><button class="button button--lime" data-testid="create-room">Open live room <span aria-hidden="true">→</span></button></div></form>
@@ -169,11 +182,13 @@ function renderEditor(error = '', focusId = ''): void {
 }
 
 function questionEditor(question: Question, index: number): string {
-  return `<fieldset class="question-card"><legend><span>Q${String(index + 1).padStart(2, '0')}</span> Question ${index + 1}</legend><label for="q${index}-prompt">Prompt<input id="q${index}-prompt" name="q${index}-prompt" maxlength="240" required value="${escapeHtml(question.prompt)}" placeholder="Ask something precise"></label><div class="answer-grid">${question.answers.map((answer, answerIndex) => `<label class="answer-field answer-field--${answerIndex}" for="q${index}-a${answerIndex}"><span>${String.fromCharCode(65 + answerIndex)}</span><input id="q${index}-a${answerIndex}" name="q${index}-a${answerIndex}" maxlength="120" ${answerIndex < 2 ? 'required' : ''} value="${escapeHtml(answer)}" placeholder="${answerIndex < 2 ? 'Required answer' : 'Optional answer'}"></label>`).join('')}</div><div class="question-meta"><label for="q${index}-correct">Correct answer<select id="q${index}-correct" name="q${index}-correct">${[0,1,2,3].map(value => `<option value="${value}" ${question.correct_index === value ? 'selected' : ''}>${String.fromCharCode(65 + value)}</option>`).join('')}</select></label><label for="q${index}-time">Time limit<select id="q${index}-time" name="q${index}-time">${[10,15,20,30,45,60].map(value => `<option value="${value}" ${question.time_limit_seconds === value ? 'selected' : ''}>${value} seconds</option>`).join('')}</select></label>${draft.questions.length > 1 ? `<button type="button" class="remove-question" data-remove="${index}" aria-label="Remove question ${index + 1}">Remove</button>` : ''}</div></fieldset>`;
+  return `<fieldset class="question-card"><legend><span>Q${String(index + 1).padStart(2, '0')}</span> Question ${index + 1}</legend><label for="q${index}-prompt">Prompt<input id="q${index}-prompt" name="q${index}-prompt" maxlength="240" required value="${escapeHtml(question.prompt)}" placeholder="Ask something precise"></label><div class="answer-grid">${question.answers.map((answer, answerIndex) => `<label class="answer-field answer-field--${answerIndex}" for="q${index}-a${answerIndex}"><span>${String.fromCharCode(65 + answerIndex)}</span><input id="q${index}-a${answerIndex}" name="q${index}-a${answerIndex}" maxlength="120" ${answerIndex < 2 ? 'required' : ''} value="${escapeHtml(answer)}" placeholder="${answerIndex < 2 ? 'Required answer' : 'Optional answer'}"></label>`).join('')}</div><div class="question-meta"><label for="q${index}-correct">Correct answer<select id="q${index}-correct" name="q${index}-correct">${[0,1,2,3].map(value => `<option value="${value}" ${question.correct_index === value ? 'selected' : ''}>${String.fromCharCode(65 + value)}</option>`).join('')}</select></label><label for="q${index}-time">Time limit<select id="q${index}-time" name="q${index}-time">${[5,10,15,20,30,45,60,90,120].map(value => `<option value="${value}" ${question.time_limit_seconds === value ? 'selected' : ''}>${value} seconds</option>`).join('')}</select></label>${draft.questions.length > 1 ? `<button type="button" class="remove-question" data-remove="${index}" aria-label="Remove question ${index + 1}">Remove</button>` : ''}</div></fieldset>`;
 }
 
 function bindEditor(): void {
   const form = document.querySelector<HTMLFormElement>('#quiz-form');
+  form?.addEventListener('input', () => { syncDraft(form); persistDraft(); });
+  form?.addEventListener('change', () => { syncDraft(form); persistDraft(); });
   document.querySelector('#add-question')?.addEventListener('click', () => { syncDraft(form); if (draft.questions.length < 50) { draft.questions.push(blankQuestion()); renderEditor('', `q${draft.questions.length - 1}-prompt`); } });
   document.querySelectorAll<HTMLElement>('[data-remove]').forEach(button => button.addEventListener('click', () => { syncDraft(form); draft.questions.splice(Number(button.dataset.remove), 1); renderEditor(); }));
   document.querySelector('#show-import')?.addEventListener('click', () => { const panel = document.querySelector<HTMLElement>('#csv-panel'); if (panel) { panel.hidden = false; panel.querySelector('input')?.focus(); } });
@@ -183,14 +198,14 @@ function bindEditor(): void {
     const source = document.querySelector<HTMLTextAreaElement>('#csv-text')?.value ?? '';
     const result = parseCsv(source, draft.title || 'Imported quiz'); const summary = document.querySelector<HTMLDivElement>('#csv-errors');
     if (result.errors.length) { if (summary) { summary.innerHTML = `<div class="alert" role="alert"><strong>Fix ${result.errors.length} CSV ${result.errors.length === 1 ? 'issue' : 'issues'}:</strong><ul>${result.errors.map(error => `<li>${escapeHtml(error)}</li>`).join('')}</ul></div>`; summary.focus(); } return; }
-    if (result.quiz) { draft = result.quiz; renderEditor('', 'quiz-title'); }
+    if (result.quiz) { draft = result.quiz; persistDraft(); renderEditor('', 'quiz-title'); }
   });
   form?.addEventListener('submit', async event => {
     event.preventDefault(); syncDraft(form); draft.questions.forEach(question => { question.answers = question.answers.filter(answer => answer.trim()); });
     const button = form.querySelector<HTMLButtonElement>('[data-testid="create-room"]'); button?.setAttribute('disabled', '');
     try {
       const result = await api<{ code: string; host_token: string }>('/api/rooms', { method: 'POST', body: JSON.stringify({ quiz: draft }) });
-      sessionStorage.setItem(`arena:host:${result.code}`, result.host_token); sessionStorage.setItem(`arena:quiz:${result.code}`, JSON.stringify(draft)); history.replaceState({}, '', `/host?room=${result.code}`); connectHost(result.code, result.host_token); completeRoute('/host', false, false);
+      sessionStorage.setItem(`arena:host:${result.code}`, result.host_token); sessionStorage.setItem(`arena:quiz:${result.code}`, JSON.stringify(draft)); clearDraft(); history.replaceState({}, '', `/host?room=${result.code}`); connectHost(result.code, result.host_token); completeRoute('/host', false, false);
     } catch (reason) { renderEditor(messageOf(reason)); }
   });
 }
@@ -229,9 +244,9 @@ function renderLive(fallbackName = ''): void {
 function connectionBadge(state: RoomState): string { return `<div class="connection connection--${connectionStatus}" role="status"><i></i>${connectionStatus === 'live' ? 'Live' : connectionStatus === 'connecting' ? 'Connecting' : `Reconnecting · ${reconnectAttempts}/6`}${socketRole === 'player' && !state.host_connected ? '<span>Host is reconnecting</span>' : ''}</div>`; }
 function hostBoard(state: RoomState): string {
   const current = state.current;
-  if (state.phase === 'lobby') return `<section class="board lobby-board"><div class="board-top"><div><p>JOIN AT <strong>${escapeHtml(location.host)}/play</strong></p><h1 aria-label="Room code ${state.code.split('').join(' ')}">${state.code}</h1></div>${connectionBadge(state)}</div><div class="lobby-main"><div><p class="eyebrow"><span></span> ${escapeHtml(state.quiz_title)}</p><h2>Room is open.</h2><p class="big-status"><strong>${state.player_count}</strong> ${state.player_count === 1 ? 'player' : 'players'} ready</p><div class="player-cloud">${state.leaderboard.map(player => `<span>${escapeHtml(player.nickname)}</span>`).join('') || '<span class="muted">Waiting for the first player…</span>'}</div></div><aside class="host-tools"><a class="button button--cyan" href="/play?room=${state.code}" target="_blank">Open player entry</a><button class="button button--ghost" id="copy-join">Copy join link</button><button class="button button--ghost" id="copy-quiz">Copy reusable quiz link</button><button class="button button--lime" data-action="start" ${state.player_count < 1 ? 'disabled aria-describedby="start-hint"' : ''}>Start quiz <span aria-hidden="true">→</span></button>${state.player_count < 1 ? '<small id="start-hint">Waiting for at least one player.</small>' : ''}<p id="copy-status" class="sr-status" role="status"></p></aside></div></section>`;
+  if (state.phase === 'lobby') return `<section class="board lobby-board"><div class="board-top"><div><p>JOIN AT <strong>${escapeHtml(location.host)}/play</strong></p><h1 aria-label="Room code ${state.code.split('').join(' ')}">${state.code}</h1></div>${connectionBadge(state)}</div><div class="lobby-main"><div><p class="eyebrow"><span></span> ${escapeHtml(state.quiz_title)}</p><h2>Room is open.</h2><p class="big-status"><strong>${state.player_count}</strong> ${state.player_count === 1 ? 'learner' : 'learners'} ready</p><div class="player-cloud">${state.leaderboard.map(player => `<span>${escapeHtml(player.nickname)}</span>`).join('') || '<span class="muted">Waiting for the first learner…</span>'}</div></div><aside class="host-tools"><a class="button button--cyan" href="/play?room=${state.code}" target="_blank">Open learner entry</a><button class="button button--ghost" id="copy-join">Copy join link</button><button class="button button--ghost" id="copy-quiz">Copy reusable quiz link</button><button class="button button--lime" data-action="start" ${state.player_count < 1 ? 'disabled aria-describedby="start-hint"' : ''}>Start quiz <span aria-hidden="true">→</span></button>${state.player_count < 1 ? '<small id="start-hint">Waiting for at least one learner.</small>' : ''}<p id="copy-status" class="sr-status" role="status"></p></aside></div></section>`;
   if (state.phase === 'question' && current) return `<section class="board question-board"><div class="board-strip"><span>Q ${current.number}/${current.total}</span><span>${current.answered}/${state.player_count} LOCKED IN</span>${connectionBadge(state)}</div><h1>${escapeHtml(current.prompt)}</h1><div class="host-answer-grid">${current.answers.map((answer, index) => answerLane(answer, index)).join('')}</div><div class="board-controls"><span>${current.time_limit_seconds}s question</span><button class="button button--lime" data-action="advance">Reveal answer <span aria-hidden="true">→</span></button></div></section>`;
-  if (state.phase === 'leaderboard') return `<section class="board results-board"><div class="board-strip"><span>RESULTS · Q ${current?.number}/${current?.total}</span>${connectionBadge(state)}</div><div class="correct-call"><span>CORRECT</span><h1>${current ? `${String.fromCharCode(65 + (current.correct_index ?? 0))} · ${escapeHtml(current.answers[current.correct_index ?? 0])}` : ''}</h1></div>${leaderboard(state.leaderboard)}<div class="board-controls"><span>${state.player_count} in the arena</span><button class="button button--lime" data-action="advance">${current?.number === current?.total ? 'Show final podium' : 'Next question'} <span aria-hidden="true">→</span></button></div></section>`;
+  if (state.phase === 'leaderboard') return `<section class="board results-board"><div class="board-strip"><span>RESULTS · Q ${current?.number}/${current?.total}</span>${connectionBadge(state)}</div><div class="correct-call"><span>CORRECT</span><h1>${current ? `${String.fromCharCode(65 + (current.correct_index ?? 0))} · ${escapeHtml(current.answers[current.correct_index ?? 0])}` : ''}</h1></div>${leaderboard(state.leaderboard)}<div class="board-controls"><span>${state.player_count} learners ranked</span><button class="button button--lime" data-action="advance">${current?.number === current?.total ? 'Show final podium' : 'Next question'} <span aria-hidden="true">→</span></button></div></section>`;
   return podium(state, true);
 }
 
