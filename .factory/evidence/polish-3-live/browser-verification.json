@@ -1,0 +1,145 @@
+{
+  "routes": [
+    {
+      "label": "/",
+      "title": "Open Quiz Arena — run live classroom quizzes",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    },
+    {
+      "label": "/create",
+      "title": "Create a quiz — Open Quiz Arena",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    },
+    {
+      "label": "/play",
+      "title": "Join a quiz — Open Quiz Arena",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    },
+    {
+      "label": "/privacy",
+      "title": "Privacy — Open Quiz Arena",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    },
+    {
+      "label": "/terms",
+      "title": "Terms — Open Quiz Arena",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    },
+    {
+      "label": "live host question",
+      "title": "Host a quiz — Open Quiz Arena",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    },
+    {
+      "label": "live mobile player question",
+      "title": "Join a quiz — Open Quiz Arena",
+      "lang": "en",
+      "mains": 1,
+      "h1s": 1,
+      "horizontalOverflow": false,
+      "axe_serious_critical": []
+    }
+  ],
+  "keyboard": {
+    "skip_link": {
+      "text": "Skip to main content",
+      "outlineWidth": "3px",
+      "outlineStyle": "solid"
+    },
+    "csv_error_focus": true
+  },
+  "mobile": {
+    "viewport": [
+      360,
+      780
+    ],
+    "scrollWidth": 360,
+    "buttons": [
+      {
+        "text": "AFirst",
+        "width": 155,
+        "height": 268
+      },
+      {
+        "text": "BSecond",
+        "width": 155,
+        "height": 268
+      },
+      {
+        "text": "CThird",
+        "width": 155,
+        "height": 268
+      },
+      {
+        "text": "DFourth",
+        "width": 155,
+        "height": 268
+      }
+    ]
+  },
+  "projector": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "board_within_viewport": true,
+    "answer_columns": 2,
+    "horizontal_overflow": false,
+    "prompt_visible": true
+  },
+  "zoom": {
+    "root_font_px": "32px",
+    "horizontal_overflow": false,
+    "heading_visible": true,
+    "last_heading_visible": true
+  },
+  "reduced_motion": {
+    "media_matches": true,
+    "animation_duration": "1e-05s",
+    "transition_duration": "1e-05s"
+  },
+  "live": {
+    "join_attempts": 1,
+    "start_attempts": 1,
+    "keyboard_answer_attempts": 1,
+    "storage": {
+      "cookies": "",
+      "local_storage_keys": [],
+      "session_storage_keys": [
+        "arena:player:821914"
+      ],
+      "indexed_db_names": [],
+      "service_workers": 0
+    },
+    "console_errors": [],
+    "failed_requests": []
+  },
+  "network": {
+    "total_requests": 12,
+    "third_party_requests": []
+  }
+}

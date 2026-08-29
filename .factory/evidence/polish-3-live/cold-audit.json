@@ -1,0 +1,90 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "title": "Open Quiz Arena — run live classroom quizzes",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/demo",
+    "status": 200,
+    "title": "Demo — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/?demo=1",
+    "status": 200,
+    "title": "Demo — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/create",
+    "status": 200,
+    "title": "Create a quiz — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/play",
+    "status": 200,
+    "title": "Join a quiz — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/privacy",
+    "status": 200,
+    "title": "Privacy — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/terms",
+    "status": 200,
+    "title": "Terms — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  },
+  {
+    "path": "/definitely-missing",
+    "status": 404,
+    "title": "Page not found — Open Quiz Arena",
+    "lang": "en",
+    "mains": 1,
+    "h1s": 1,
+    "overflow": false,
+    "serious": [],
+    "errors": []
+  }
+]
