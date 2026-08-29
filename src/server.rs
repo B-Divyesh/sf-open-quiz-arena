@@ -16,7 +16,7 @@ use rand::Rng;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -40,7 +40,7 @@ pub struct AppState {
     build_sha: String,
     rate_second: AtomicU64,
     rate_count: AtomicU64,
-    rate_clients: StdMutex<HashMap<String, (u64, u32)>>,
+    rate_clients: StdMutex<HashMap<String, VecDeque<Instant>>>,
 }
 
 impl AppState {
@@ -534,14 +534,21 @@ async fn rate_limit(
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if clients.len() > 10_000 {
-            clients.retain(|_, (second, _)| *second + 10 >= now);
+            let cutoff = Instant::now() - Duration::from_secs(10);
+            clients.retain(|_, requests| requests.back().is_some_and(|time| *time >= cutoff));
         }
-        let entry = clients.entry(client).or_insert((now, 0));
-        if entry.0 != now {
-            *entry = (now, 0);
+        let current = Instant::now();
+        let cutoff = current - Duration::from_secs(1);
+        let requests = clients.entry(client).or_default();
+        while requests.front().is_some_and(|time| *time < cutoff) {
+            requests.pop_front();
         }
-        entry.1 += 1;
-        entry.1 > 180
+        if requests.len() >= 180 {
+            true
+        } else {
+            requests.push_back(current);
+            false
+        }
     };
     if limited {
         return (StatusCode::TOO_MANY_REQUESTS, [(header::RETRY_AFTER, "1")], Json(json!({ "error": "Too many requests from this connection. Wait a moment and try again." }))).into_response();
